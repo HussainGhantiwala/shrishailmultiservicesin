@@ -1,8 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Yatra+One&family=Rozha+One&family=Mukta:wght@400;500;600;700&family=Noto+Serif+Devanagari:wght@400;500;600;700&family=Hind:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: 'Poppins', system-ui, sans-serif;
+  --font-yatra: 'Yatra One', cursive;
+  --font-rozha: 'Rozha One', serif;
+  --font-mukta: 'Mukta', sans-serif;
+  --font-noto-devanagari: 'Noto Serif Devanagari', serif;
+  --font-hind: 'Hind', sans-serif;
   --color-brand-primary: #2563EB;
   --color-brand-secondary: #0F172A;
   --color-brand-accent: #3B82F6;
