@@ -67,7 +67,7 @@ BEGIN
         -- Also notify customer if user_id exists
         IF EXISTS (SELECT 1 FROM public.customers WHERE id = NEW.customer_id AND user_id IS NOT NULL) THEN
             INSERT INTO public.notifications (id, user_id, title, message, is_read, type, severity, reference_id, created_at)
-            SELECT gen_random_uuid(), user_id, v_action_title, v_msg, FALSE, 'ledger', 'info', NEW.id
+            SELECT gen_random_uuid(), user_id, v_action_title, v_msg, FALSE, 'ledger', 'info', NEW.id, NOW()
             FROM public.customers WHERE id = NEW.customer_id AND user_id IS NOT NULL;
         END IF;
 
