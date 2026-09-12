@@ -21,8 +21,10 @@ export const formatRupees = (amount) => {
 };
 
 export const parseCurrency = (formattedString) => {
-  if (!formattedString) return 0;
+  if (formattedString === null || formattedString === undefined || formattedString === '') return 0;
+  if (typeof formattedString === 'number') return isNaN(formattedString) ? 0 : formattedString;
   const cleaned = formattedString.toString().replace(/[^0-9.-]+/g, '');
+  if (!cleaned || cleaned === '-' || cleaned === '.') return 0;
   const parsed = parseFloat(cleaned);
   return isNaN(parsed) ? 0 : parsed;
 };

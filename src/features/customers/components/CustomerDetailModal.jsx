@@ -6,7 +6,7 @@ import { formatRupees } from '../../../utils/currency';
 import { formatDate } from '../../../utils/date';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
-import { User, Phone, Mail, MapPin, CreditCard, Shield, Lock, KeyRound, MessageSquare } from 'lucide-react';
+import { User, Phone, Mail, MapPin, CreditCard, Shield, Lock, KeyRound, UserCheck } from 'lucide-react';
 
 export default function CustomerDetailModal({
   isOpen,
@@ -14,7 +14,6 @@ export default function CustomerDetailModal({
   customer,
   onStatusChange,
   onToggleLogin,
-  onOpenReminder,
 }) {
   const { isAdmin, canManageCustomers } = useAuth();
   const toast = useToast();
@@ -151,15 +150,6 @@ export default function CustomerDetailModal({
         {/* Admin Quick Control Actions */}
         {canManageCustomers && (
           <div className="pt-2 border-t border-slate-100 flex flex-wrap gap-2 justify-end">
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={MessageSquare}
-              onClick={() => onOpenReminder && onOpenReminder(customer.id)}
-            >
-              Send SMS Reminder
-            </Button>
-
             {customer.status === 'pending_approval' && (
               <Button
                 variant="primary"

@@ -17,10 +17,9 @@ import {
   ArrowDownRight,
   RefreshCw,
   Bookmark,
-  Calendar,
-  Filter,
   CheckCircle2,
-  MessageSquare,
+  Receipt,
+  Calendar,
 } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
@@ -31,7 +30,7 @@ import StatCard from '../../../components/common/StatCard';
 import LedgerFormModal from '../components/LedgerFormModal';
 import LedgerAuditHistoryModal from '../components/LedgerAuditHistoryModal';
 import ConfirmationDialog from '../../../components/common/ConfirmationDialog';
-import SendReminderModal from '../../../components/common/SendReminderModal';
+import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
 
 export default function LedgerPage() {
   const { user, isAdmin, isStaff, isCustomer } = useAuth();
@@ -40,7 +39,9 @@ export default function LedgerPage() {
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [ledgerData, setLedgerData] = useState([]);
-  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [receiptTarget, setReceiptTarget] = useState(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isNewReceipt, setIsNewReceipt] = useState(false);
   const [balances, setBalances] = useState({ totalCredit: 0, totalDebit: 0, totalPaid: 0, totalAdjustment: 0, outstandingBalance: 0 });
   const [loading, setLoading] = useState(true);
 
@@ -62,11 +63,22 @@ export default function LedgerPage() {
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [restoreTargetId, setRestoreTargetId] = useState(null);
 
-  // Default selected customer to 'all' for admin/staff, or first customer for customer role
-  useEffect(() => {
-    customerApi.getCustomers().then((res) => {
+  // Helper to fetch and sync fresh customer accounts
+  const fetchCustomers = async () => {
+    try {
+      const res = await customerApi.getCustomers();
       const list = res.data || [];
       setCustomers(list);
+      return list;
+    } catch (err) {
+      console.error('Failed to load customers:', err);
+      return [];
+    }
+  };
+
+  // Default selected customer to 'all' for admin/staff, or first customer for customer role
+  useEffect(() => {
+    fetchCustomers().then(() => {
       if (!selectedCustomerId) {
         setSelectedCustomerId('all');
       }
@@ -110,9 +122,36 @@ export default function LedgerPage() {
       if (entryToEdit) {
         await ledgerApi.updateLedgerEntry(entryToEdit.id, formData, user, 'Updated via Ledger Screen');
         toast.success('Ledger entry updated successfully.');
+        await fetchCustomers();
       } else {
-        await ledgerApi.addLedgerEntry(formData, user);
+        const res = await ledgerApi.addLedgerEntry(formData, user);
         toast.success('New ledger entry recorded.');
+
+        // Refresh customer list so that all accounts are up to date with new balance
+        const freshList = await fetchCustomers();
+        const freshCust = freshList.find((c) => c.id === formData.customer_id) || customers.find((c) => c.id === formData.customer_id) || selectedCustomer;
+
+        if (res?.data) {
+          // Authoritative outstanding balance is returned from customer_accounts after DB trigger execution
+          const authoritativeBalance = res.account?.outstanding_balance !== undefined
+            ? Number(res.account.outstanding_balance)
+            : freshCust?.account?.outstanding_balance !== undefined
+            ? Number(freshCust.account.outstanding_balance)
+            : undefined;
+
+          const mergedCustomer = {
+            ...freshCust,
+            account: res.account || freshCust?.account,
+          };
+
+          setReceiptTarget({
+            entry: res.data,
+            customer: mergedCustomer,
+            outstandingBalance: authoritativeBalance,
+          });
+          setIsNewReceipt(true);
+          setIsReceiptModalOpen(true);
+        }
       }
       fetchLedger();
     } finally {
@@ -127,6 +166,7 @@ export default function LedgerPage() {
       await ledgerApi.softDeleteEntry(deleteTargetId, user, 'Soft-deleted by Admin');
       toast.success('Ledger entry soft-deleted.');
       setDeleteTargetId(null);
+      await fetchCustomers();
       fetchLedger();
     } catch (err) {
       toast.error(err.message || 'Failed to soft-delete entry');
@@ -140,6 +180,7 @@ export default function LedgerPage() {
       await ledgerApi.restoreEntry(restoreTargetId, user, 'Restored by Admin');
       toast.success('Soft-deleted ledger entry restored.');
       setRestoreTargetId(null);
+      await fetchCustomers();
       fetchLedger();
     } catch (err) {
       toast.error(err.message || 'Failed to restore entry');
@@ -287,6 +328,29 @@ export default function LedgerPage() {
       align: 'center',
       render: (row) => (
         <div className="flex items-center justify-center gap-1">
+          {!row.is_deleted && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const targetCust = row.customer || customers.find((c) => c.id === row.customer_id) || selectedCustomer;
+                const authoritativeBalance = targetCust?.account?.outstanding_balance !== undefined
+                  ? Number(targetCust.account.outstanding_balance)
+                  : undefined;
+                setReceiptTarget({
+                  entry: row,
+                  customer: targetCust,
+                  outstandingBalance: authoritativeBalance,
+                });
+                setIsNewReceipt(false);
+                setIsReceiptModalOpen(true);
+              }}
+              icon={Receipt}
+              className="text-brand-primary hover:bg-blue-50"
+              title="Share Receipt (WhatsApp / Email)"
+            />
+          )}
+
           <Button
             variant="ghost"
             size="sm"
@@ -345,15 +409,6 @@ export default function LedgerPage() {
         description="Single source of truth for customer account credits, debits, adjustments, and running balance timeline."
         actions={
           <>
-            {!isCustomer && (
-              <Button
-                variant="secondary"
-                icon={MessageSquare}
-                onClick={() => setIsReminderModalOpen(true)}
-              >
-                Send SMS Reminder
-              </Button>
-            )}
             <Button variant="secondary" icon={Printer} onClick={() => window.print()}>
               Print Ledger
             </Button>
@@ -395,16 +450,6 @@ export default function LedgerPage() {
             <div className="text-xs text-slate-500 font-mono">
               Account: <strong className="text-slate-800">{selectedCustomer.account?.account_number || 'ALL-ACCOUNTS'}</strong>
             </div>
-            {selectedCustomerId !== 'all' && Number(selectedCustomer.account?.outstanding_balance || 0) > 0 && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={MessageSquare}
-                onClick={() => setIsReminderModalOpen(true)}
-              >
-                Send Reminder
-              </Button>
-            )}
           </div>
         </div>
       )}
@@ -564,12 +609,26 @@ export default function LedgerPage() {
         confirmText="Restore Entry"
       />
 
-      {/* SMS Reminder Workflow Modal */}
-      <SendReminderModal
-        isOpen={isReminderModalOpen}
-        onClose={() => setIsReminderModalOpen(false)}
-        preselectedCustomerId={selectedCustomerId !== 'all' ? selectedCustomerId : null}
-      />
+      {/* Receipt Share Modal */}
+      {receiptTarget && (
+        <ReceiptShareModal
+          isOpen={isReceiptModalOpen}
+          onClose={() => {
+            setIsReceiptModalOpen(false);
+            setReceiptTarget(null);
+            setIsNewReceipt(false);
+          }}
+          entry={receiptTarget.entry}
+          customer={receiptTarget.customer}
+          outstandingBalance={receiptTarget.outstandingBalance}
+          isNewEntry={isNewReceipt}
+          onCustomerUpdated={(updatedCust) => {
+            setCustomers((prev) =>
+              prev.map((c) => (c.id === updatedCust.id ? { ...c, ...updatedCust } : c))
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

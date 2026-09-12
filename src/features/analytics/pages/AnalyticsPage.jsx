@@ -59,7 +59,7 @@ const AnalyticsPage = () => {
     return (
       <div className="flex flex-col h-full bg-slate-50 font-sans p-6">
         <PageHeader title="Business Analytics & Growth" description="Live revenue trends, customer insights, and payment analysis." />
-        <EmptyState title="Error" message={error} icon={<BarChart3 className="text-rose-500 w-12 h-12" />} />
+        <EmptyState title="Error Loading Analytics" description={error} icon={BarChart3} />
       </div>
     );
   }

@@ -21,7 +21,13 @@ export const transactionsApi = {
 
     let query = supabase
       .from('ledger_entries')
-      .select('*, customer:customers(name, phone)', { count: 'exact' })
+      .select(`
+        *,
+        customer:customers(
+          id, name, phone, email, status,
+          account:customer_accounts(id, account_number, outstanding_balance, total_paid, total_credit, total_debit)
+        )
+      `, { count: 'exact' })
       .order('created_at', { ascending: false });
 
     if (!showDeleted) {
@@ -53,7 +59,16 @@ export const transactionsApi = {
     const { data, count, error } = await query;
     if (error) throw new Error(error.message);
 
-    return { data: data || [], count: count || 0, error: null };
+    const normalizedData = (data || []).map((entry) => {
+      const cust = entry.customer;
+      const acc = cust?.account ? (Array.isArray(cust.account) ? cust.account[0] : cust.account) : null;
+      return {
+        ...entry,
+        customer: cust ? { ...cust, account: acc } : null,
+      };
+    });
+
+    return { data: normalizedData, count: count || 0, error: null };
   },
 
   /**

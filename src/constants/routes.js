@@ -14,7 +14,6 @@ export const ROUTES = {
     TRANSACTIONS: '/portal/transactions',
     REPORTS: '/portal/reports',
     ANALYTICS: '/portal/analytics',
-    SMS: '/portal/sms',
     NOTIFICATIONS: '/portal/notifications',
     PROFILE: '/portal/profile',
     SETTINGS: '/portal/settings',

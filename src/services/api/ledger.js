@@ -1,5 +1,4 @@
 import { supabase } from '../../lib/supabase';
-import { notificationService } from './sms';
 
 /**
  * Pure Balance Calculation Engine
@@ -101,7 +100,7 @@ export const ledgerApi = {
         *,
         customer:customers(
           id, name, phone, email, status,
-          account:customer_accounts(account_number)
+          account:customer_accounts(id, account_number, outstanding_balance, total_paid, total_credit, total_debit, status)
         )
       `, { count: 'exact' })
       .order('created_at', { ascending: false });
@@ -152,8 +151,29 @@ export const ledgerApi = {
     const computedEntries = computeRunningBalances(normalizedData);
     let balances = calculateBalances(normalizedData);
 
-    // If viewing All Customers, compute aggregate stats across all accounts
-    if (isAllCustomers) {
+    // If a specific customer is selected, query authoritative balances directly from customer_accounts
+    if (!isAllCustomers) {
+      try {
+        const { data: acc } = await supabase
+          .from('customer_accounts')
+          .select('outstanding_balance, total_paid, total_credit, total_debit')
+          .eq('customer_id', customerId)
+          .maybeSingle();
+
+        if (acc) {
+          balances = {
+            totalCredit: Number(acc.total_credit || 0),
+            totalDebit: Number(acc.total_debit || 0),
+            totalPaid: Number(acc.total_paid || acc.total_debit || 0),
+            totalAdjustment: 0,
+            outstandingBalance: Number(acc.outstanding_balance || 0),
+          };
+        }
+      } catch (e) {
+        console.warn('Error fetching customer account authoritative balance:', e.message);
+      }
+    } else {
+      // If viewing All Customers, compute aggregate stats across all accounts
       try {
         const { data: accountsData } = await supabase.from('customer_accounts').select('outstanding_balance, total_credit, total_debit');
         const { count: activeCount } = await supabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'active');
@@ -231,45 +251,21 @@ export const ledgerApi = {
       reason: entryData.notes || 'New ledger entry recorded',
     });
 
-    // Automatically trigger SMS notification via send-sms Edge Function
-    try {
-      const { data: cust } = await supabase
-        .from('customers')
-        .select('name, phone, account:customer_accounts(outstanding_balance)')
-        .eq('id', entryData.customer_id)
-        .single();
+    // Fetch the updated customer account with the new authoritative outstanding balance
+    const { data: updatedAccount } = await supabase
+      .from('customer_accounts')
+      .select('*')
+      .eq('customer_id', entryData.customer_id)
+      .maybeSingle();
 
-      if (cust && cust.phone) {
-        const acc = Array.isArray(cust.account) ? cust.account[0] : cust.account;
-        const runningBal = acc?.outstanding_balance || 0;
-
-        if (entryData.entry_type === 'debit') {
-          notificationService.sendPaymentReceivedSMS({
-            customerId: entryData.customer_id,
-            phone: cust.phone,
-            customerName: cust.name,
-            amount: Number(entryData.amount),
-            runningBalance: runningBal,
-            referenceNo: entryData.reference_no,
-            currentUser,
-          });
-        } else if (entryData.entry_type === 'credit' || entryData.entry_type === 'opening_balance') {
-          notificationService.sendAmountGivenSMS({
-            customerId: entryData.customer_id,
-            phone: cust.phone,
-            customerName: cust.name,
-            amount: Number(entryData.amount),
-            runningBalance: runningBal,
-            referenceNo: entryData.reference_no,
-            currentUser,
-          });
-        }
-      }
-    } catch (smsErr) {
-      console.warn('SMS dispatch error (non-blocking):', smsErr.message);
-    }
-
-    return { data, error: null };
+    return {
+      data: {
+        ...data,
+        account: updatedAccount,
+      },
+      account: updatedAccount,
+      error: null,
+    };
   },
 
   /**
@@ -306,7 +302,21 @@ export const ledgerApi = {
       reason,
     });
 
-    return { data, error: null };
+    const cid = data.customer_id || existing?.customer_id;
+    const { data: updatedAccount } = await supabase
+      .from('customer_accounts')
+      .select('*')
+      .eq('customer_id', cid)
+      .maybeSingle();
+
+    return {
+      data: {
+        ...data,
+        account: updatedAccount,
+      },
+      account: updatedAccount,
+      error: null,
+    };
   },
 
   /**
@@ -338,7 +348,21 @@ export const ledgerApi = {
       reason,
     });
 
-    return { data, error: null };
+    const cid = data.customer_id || existing?.customer_id;
+    const { data: updatedAccount } = await supabase
+      .from('customer_accounts')
+      .select('*')
+      .eq('customer_id', cid)
+      .maybeSingle();
+
+    return {
+      data: {
+        ...data,
+        account: updatedAccount,
+      },
+      account: updatedAccount,
+      error: null,
+    };
   },
 
   /**
@@ -370,7 +394,21 @@ export const ledgerApi = {
       reason,
     });
 
-    return { data, error: null };
+    const cid = data.customer_id || existing?.customer_id;
+    const { data: updatedAccount } = await supabase
+      .from('customer_accounts')
+      .select('*')
+      .eq('customer_id', cid)
+      .maybeSingle();
+
+    return {
+      data: {
+        ...data,
+        account: updatedAccount,
+      },
+      account: updatedAccount,
+      error: null,
+    };
   },
 
   /**

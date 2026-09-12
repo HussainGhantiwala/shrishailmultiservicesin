@@ -36,7 +36,7 @@ export default function Button({
       {isLoading ? (
         <LoadingSpinner size="sm" />
       ) : Icon ? (
-        <Icon className="w-4 h-4 shrink-0" />
+        React.isValidElement(Icon) ? Icon : <Icon className="w-4 h-4 shrink-0" />
       ) : null}
       <span>{children}</span>
     </button>

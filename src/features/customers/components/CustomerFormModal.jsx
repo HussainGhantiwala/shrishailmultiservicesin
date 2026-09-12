@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
 import { isValidEmail, isValidPhone, isValidGST } from '../../../utils/validation';
+import { parseCurrency } from '../../../utils/currency';
 import { useToast } from '../../../context/ToastContext';
 import { User, Phone, Mail, MapPin, FileText, Lock, Shield } from 'lucide-react';
 
@@ -14,6 +15,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
     address: '',
     gst_number: '',
     notes: '',
+    opening_balance: '',
     is_login_enabled: false,
     status: 'active',
   });
@@ -73,6 +75,18 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
 
     if (formData.gst_number && !isValidGST(formData.gst_number)) {
       errs.gst_number = 'Enter a valid 15-character GSTIN number';
+    }
+
+    if (formData.opening_balance && String(formData.opening_balance).trim()) {
+      const valStr = String(formData.opening_balance).trim();
+      if (/[^0-9.,\s₹$]/.test(valStr)) {
+        errs.opening_balance = 'Enter a valid numeric amount (e.g. 1,00,000 or 50000)';
+      } else {
+        const parsed = parseCurrency(valStr);
+        if (parsed < 0) {
+          errs.opening_balance = 'Opening balance cannot be negative';
+        }
+      }
     }
 
     setErrors(errs);
@@ -238,15 +252,19 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={formData.opening_balance}
                 onChange={(e) => handleChange('opening_balance', e.target.value)}
-                placeholder="0.00 (Leaves initial balance clean)"
-                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:border-brand-primary focus:outline-none font-mono"
+                placeholder="0.00 (e.g. 1,00,000 or 50000)"
+                className={`w-full pl-8 pr-3 py-2 bg-slate-50 border rounded-lg focus:bg-white focus:outline-none font-mono ${
+                  errors.opening_balance ? 'border-rose-500' : 'border-slate-300 focus:border-brand-primary'
+                }`}
               />
             </div>
+            {errors.opening_balance && (
+              <p className="text-[11px] text-rose-600 mt-0.5">{errors.opening_balance}</p>
+            )}
             <p className="text-[10px] text-slate-400 mt-0.5">
               Creating a customer with an opening balance automatically posts an "Opening Balance" ledger entry.
             </p>

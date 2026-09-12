@@ -322,7 +322,7 @@ const DashboardPage = () => {
         ) : (
           <div className="p-8">
             <EmptyState
-              icon={<FileSpreadsheet className="w-12 h-12 text-slate-300" />}
+              icon={FileSpreadsheet}
               title="No recent activity"
               description="There are no entries recorded yet for today."
               actionLabel="Add New Entry"

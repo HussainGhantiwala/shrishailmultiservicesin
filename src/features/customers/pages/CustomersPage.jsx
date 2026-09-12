@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { customerApi } from '../../../services/api/customers';
-import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound, MessageSquare } from 'lucide-react';
+import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
 import SearchBar from '../../../components/common/SearchBar';
@@ -13,10 +13,8 @@ import StatCard from '../../../components/common/StatCard';
 import CustomerFormModal from '../components/CustomerFormModal';
 import CustomerDetailModal from '../components/CustomerDetailModal';
 import EnableLoginModal from '../components/EnableLoginModal';
-import SendReminderModal from '../../../components/common/SendReminderModal';
 import { formatRupees } from '../../../utils/currency';
 import { formatDate } from '../../../utils/date';
-import { notificationService } from '../../../services/api/sms';
 
 export default function CustomersPage() {
   const { user, isAdmin, isCustomer, canManageCustomers } = useAuth();
@@ -33,10 +31,6 @@ export default function CustomersPage() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [enableLoginTarget, setEnableLoginTarget] = useState(null);
-
-  // State for SMS Reminder Workflow
-  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
-  const [reminderCustomerId, setReminderCustomerId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const fetchCustomers = async () => {
@@ -62,16 +56,8 @@ export default function CustomersPage() {
         await customerApi.updateCustomer(customerToEdit.id, formData);
         toast.success('Customer profile updated successfully.');
       } else {
-        const res = await customerApi.createCustomer(formData);
+        await customerApi.createCustomer(formData, user);
         toast.success('Customer registered & initial ledger account created.');
-        if (res.data?.phone) {
-          notificationService.sendWelcomeSMS({
-            customerId: res.data.id,
-            phone: res.data.phone,
-            customerName: res.data.name,
-            currentUser: user,
-          });
-        }
       }
       fetchCustomers();
     } finally {
@@ -295,27 +281,15 @@ export default function CustomersPage() {
         description="Register customers, review pending approval accounts, enable portal logins, and monitor customer accounts."
         actions={
           canManageCustomers && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="secondary"
-                icon={MessageSquare}
-                onClick={() => {
-                  setReminderCustomerId(null);
-                  setIsReminderModalOpen(true);
-                }}
-              >
-                Send Payment Reminder SMS
-              </Button>
-              <Button
-                icon={Plus}
-                onClick={() => {
-                  setCustomerToEdit(null);
-                  setIsFormModalOpen(true);
-                }}
-              >
-                Add New Customer
-              </Button>
-            </div>
+            <Button
+              icon={Plus}
+              onClick={() => {
+                setCustomerToEdit(null);
+                setIsFormModalOpen(true);
+              }}
+            >
+              Add New Customer
+            </Button>
           )
         }
       />
@@ -372,11 +346,6 @@ export default function CustomersPage() {
         customer={selectedCustomer}
         onStatusChange={handleStatusChange}
         onToggleLogin={handleToggleLogin}
-        onOpenReminder={(id) => {
-          setIsDetailModalOpen(false);
-          setReminderCustomerId(id);
-          setIsReminderModalOpen(true);
-        }}
       />
 
       {/* Enable Login Modal */}
@@ -385,16 +354,6 @@ export default function CustomersPage() {
         onClose={() => setEnableLoginTarget(null)}
         customer={enableLoginTarget}
         onSuccess={fetchCustomers}
-      />
-
-      {/* SMS Reminder Workflow Modal */}
-      <SendReminderModal
-        isOpen={isReminderModalOpen}
-        onClose={() => {
-          setIsReminderModalOpen(false);
-          setReminderCustomerId(null);
-        }}
-        preselectedCustomerId={reminderCustomerId}
       />
     </div>
   );

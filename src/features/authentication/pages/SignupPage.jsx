@@ -47,7 +47,7 @@ export default function SignupPage() {
     if (!formData.name.trim()) errs.name = 'Full name is required.';
 
     if (!formData.phone.trim()) {
-      errs.phone = 'Phone number is mandatory for SMS notifications.';
+      errs.phone = 'Phone number is mandatory for account contact and receipts.';
     } else if (!isValidPhone(formData.phone)) {
       errs.phone = 'Enter a valid 10-digit Indian mobile number.';
     }
@@ -214,6 +214,7 @@ export default function SignupPage() {
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="password"
+                        autoComplete="new-password"
                         value={formData.password}
                         onChange={(e) => handleChange('password', e.target.value)}
                         placeholder="Min 8 chars, 1 uppercase, 1 special"
@@ -233,6 +234,7 @@ export default function SignupPage() {
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="password"
+                        autoComplete="new-password"
                         value={formData.confirmPassword}
                         onChange={(e) => handleChange('confirmPassword', e.target.value)}
                         placeholder="Re-enter password"

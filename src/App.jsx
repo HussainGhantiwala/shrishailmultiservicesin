@@ -20,7 +20,6 @@ import LedgerPage from './features/ledger/pages/LedgerPage';
 import TransactionsPage from './features/transactions/pages/TransactionsPage';
 import ReportsPage from './features/reports/pages/ReportsPage';
 import AnalyticsPage from './features/analytics/pages/AnalyticsPage';
-import SmsPage from './features/sms/pages/SmsPage';
 import SettingsPage from './features/settings/pages/SettingsPage';
 import ProfilePage from './features/profile/pages/ProfilePage';
 import AuditLogsPage from './pages/portal/AuditLogsPage';
@@ -62,7 +61,6 @@ function App() {
               <Route path="transactions" element={<TransactionsPage />} />
               <Route path="reports" element={<ReportsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
-              <Route path="sms" element={<SmsPage />} />
               <Route path="notifications" element={<NotificationsPage />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="unauthorized" element={<UnauthorizedPage />} />

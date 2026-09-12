@@ -16,7 +16,8 @@ import EmptyState from '../../../components/common/EmptyState';
 import { formatRupees } from '../../../utils/currency';
 import { formatDateTime, getRelativeTime } from '../../../utils/date';
 import { supabase } from '../../../lib/supabase';
-import { Plus, Pencil, Trash2, RotateCcw, Filter, Search, IndianRupee } from 'lucide-react';
+import { Plus, Pencil, Trash2, RotateCcw, Filter, Search, IndianRupee, Receipt } from 'lucide-react';
+import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
 
 export default function TransactionsPage() {
   const { user, isAdmin, canManageCustomers } = useAuth();
@@ -40,6 +41,8 @@ export default function TransactionsPage() {
   const [customers, setCustomers] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [deleteReason, setDeleteReason] = useState('');
+  const [receiptTarget, setReceiptTarget] = useState(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
 
   const initialFormData = {
     customer_id: '',
@@ -148,6 +151,7 @@ export default function TransactionsPage() {
         toast.success('Transaction created successfully');
         setShowCreateModal(false);
       }
+      fetchCustomers();
       fetchTransactions();
     } catch (err) {
       toast.error(err.message || 'Failed to save transaction');
@@ -166,6 +170,7 @@ export default function TransactionsPage() {
       await transactionsApi.softDeleteTransaction(selectedEntry.id, user, deleteReason);
       toast.success('Transaction deleted successfully');
       setShowDeleteConfirm(false);
+      fetchCustomers();
       fetchTransactions();
     } catch (err) {
       toast.error(err.message || 'Failed to delete transaction');
@@ -178,6 +183,7 @@ export default function TransactionsPage() {
     try {
       await transactionsApi.restoreTransaction(entry.id, user, 'User requested restore');
       toast.success('Transaction restored successfully');
+      fetchCustomers();
       fetchTransactions();
     } catch (err) {
       toast.error(err.message || 'Failed to restore transaction');
@@ -263,6 +269,27 @@ export default function TransactionsPage() {
       align: 'center',
       render: (row) => (
         <div className="flex items-center justify-center gap-1">
+          {!row.is_deleted && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const cust = row.customer || customers.find((c) => c.id === row.customer_id);
+                const authoritativeBalance = cust?.account?.outstanding_balance !== undefined
+                  ? Number(cust.account.outstanding_balance)
+                  : undefined;
+                setReceiptTarget({
+                  entry: row,
+                  customer: cust,
+                  outstandingBalance: authoritativeBalance,
+                });
+                setIsReceiptModalOpen(true);
+              }}
+              icon={Receipt}
+              className="text-brand-primary hover:bg-blue-50"
+              title="Share Receipt (WhatsApp / Email)"
+            />
+          )}
           {(isAdmin || canManageCustomers) && !row.is_deleted && (
             <>
               <Button variant="ghost" size="sm" onClick={() => handleEditOpen(row)} icon={Pencil} />
@@ -541,6 +568,25 @@ export default function TransactionsPage() {
           />
         </div>
       </ConfirmationDialog>
+
+      {/* Receipt Share Modal */}
+      {receiptTarget && (
+        <ReceiptShareModal
+          isOpen={isReceiptModalOpen}
+          onClose={() => {
+            setIsReceiptModalOpen(false);
+            setReceiptTarget(null);
+          }}
+          entry={receiptTarget.entry}
+          customer={receiptTarget.customer}
+          outstandingBalance={receiptTarget.outstandingBalance}
+          onCustomerUpdated={(updatedCust) => {
+            setCustomers((prev) =>
+              prev.map((c) => (c.id === updatedCust.id ? { ...c, ...updatedCust } : c))
+            );
+          }}
+        />
+      )}
     </div>
   );
 }

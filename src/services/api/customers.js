@@ -1,4 +1,6 @@
 import { supabase } from '../../lib/supabase';
+import { ledgerApi } from './ledger';
+import { parseCurrency } from '../../utils/currency';
 
 export const customerApi = {
   /**
@@ -86,30 +88,98 @@ export const customerApi = {
 
   /**
    * Create a new customer and trigger automated customer account creation
+   * and optional initial opening balance ledger entry
    */
-  async createCustomer(customerData) {
+  async createCustomer(customerData, currentUser = null) {
     const dupCheck = await this.checkDuplicate(customerData.phone, customerData.email);
     if (dupCheck.isDuplicate) {
       throw new Error(dupCheck.message);
     }
 
-    const { data, error } = await supabase
+    // 1. Insert customer record into Supabase
+    const { data: customerRecord, error } = await supabase
       .from('customers')
       .insert([{
-        name: customerData.name,
-        phone: customerData.phone,
-        email: customerData.email || null,
-        address: customerData.address || null,
-        gst_number: customerData.gst_number || null,
-        notes: customerData.notes || null,
+        name: customerData.name?.trim(),
+        phone: customerData.phone?.trim(),
+        email: customerData.email?.trim() || null,
+        address: customerData.address?.trim() || null,
+        gst_number: customerData.gst_number?.trim() || null,
+        notes: customerData.notes?.trim() || null,
         is_login_enabled: Boolean(customerData.is_login_enabled),
-        status: customerData.status || 'pending_approval',
+        status: customerData.status || 'active',
       }])
       .select(`*, account:customer_accounts(*)`)
       .single();
 
     if (error) throw new Error(error.message);
-    return { data, error: null };
+
+    // 2. Handle Opening Balance if provided and > 0
+    const rawOpeningBalance = customerData.opening_balance;
+    const openingBalance = parseCurrency(rawOpeningBalance);
+
+    if (openingBalance > 0) {
+      // First attempt: use atomic database RPC function if available
+      let rpcSucceeded = false;
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('record_customer_opening_balance', {
+          p_customer_id: customerRecord.id,
+          p_amount: openingBalance,
+          p_notes: customerData.notes
+            ? `Initial opening balance recorded at customer registration. Remarks: ${customerData.notes}`
+            : 'Initial opening balance recorded at customer registration',
+          p_created_by: currentUser?.id || null,
+        });
+
+        if (!rpcErr && rpcRes && rpcRes.success) {
+          rpcSucceeded = true;
+        }
+      } catch (e) {
+        console.warn('RPC record_customer_opening_balance attempt fallback:', e.message);
+      }
+
+      // If RPC not available or failed, fallback to ledgerApi.addLedgerEntry
+      if (!rpcSucceeded) {
+        let accountId = (Array.isArray(customerRecord.account)
+          ? customerRecord.account[0]?.id
+          : customerRecord.account?.id) || null;
+
+        if (!accountId) {
+          const { data: acc } = await supabase
+            .from('customer_accounts')
+            .select('id')
+            .eq('customer_id', customerRecord.id)
+            .maybeSingle();
+          accountId = acc?.id || null;
+        }
+
+        // Check if an opening_balance entry already exists to prevent duplicate entries
+        const { data: existingOpening } = await supabase
+          .from('ledger_entries')
+          .select('id')
+          .eq('customer_id', customerRecord.id)
+          .eq('entry_type', 'opening_balance')
+          .eq('is_deleted', false);
+
+        if (!existingOpening || existingOpening.length === 0) {
+          await ledgerApi.addLedgerEntry({
+            customer_id: customerRecord.id,
+            account_id: accountId,
+            entry_type: 'opening_balance',
+            amount: openingBalance,
+            description: 'Initial Opening Balance',
+            reference_no: 'INIT/OPENING',
+            notes: customerData.notes
+              ? `Initial opening balance recorded at customer registration. Remarks: ${customerData.notes}`
+              : 'Initial opening balance recorded at customer registration',
+          }, currentUser);
+        }
+      }
+    }
+
+    // 3. Return freshly joined customer data with latest account totals
+    const { data: updatedCustomer } = await this.getCustomerById(customerRecord.id);
+    return { data: updatedCustomer || customerRecord, error: null };
   },
 
   /**
@@ -170,5 +240,38 @@ export const customerApi = {
 
     if (error) throw new Error(error.message);
     return { data, error: null };
-  }
+  },
+
+  /**
+   * Update Customer Contact Details (Phone / Email) from Receipt flow or Directory
+   */
+  async updateCustomerContact(id, { phone, email }) {
+    if (phone || email) {
+      const dupCheck = await this.checkDuplicate(phone || '', email || null, id);
+      if (dupCheck.isDuplicate) {
+        throw new Error(dupCheck.message);
+      }
+    }
+
+    const updates = { updated_at: new Date().toISOString() };
+    if (phone !== undefined) updates.phone = phone.trim();
+    if (email !== undefined) updates.email = email ? email.trim() : null;
+
+    const { data, error } = await supabase
+      .from('customers')
+      .update(updates)
+      .eq('id', id)
+      .select(`*, account:customer_accounts(*)`)
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    return {
+      data: {
+        ...data,
+        account: Array.isArray(data.account) ? data.account[0] : data.account,
+      },
+      error: null,
+    };
+  },
 };
