@@ -55,6 +55,33 @@ export const AuthProvider = ({ children }) => {
     return authService.resetPassword(email);
   };
 
+  const refreshUser = async () => {
+    try {
+      const freshUser = await authService.getCurrentUser();
+      setUser(freshUser);
+      return freshUser;
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+      return null;
+    }
+  };
+
+  const updateProfile = async (profileData) => {
+    if (!user?.id) throw new Error('Not authenticated');
+    const updatedUser = await authService.updateProfile(user.id, profileData);
+    setUser(updatedUser);
+    return updatedUser;
+  };
+
+  const changePassword = async ({ currentPassword, newPassword }) => {
+    if (!user?.email) throw new Error('Account email missing');
+    return await authService.changePassword({
+      email: user.email,
+      currentPassword,
+      newPassword,
+    });
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -67,6 +94,9 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         resetPassword,
+        refreshUser,
+        updateProfile,
+        changePassword,
         loading
       }}
     >

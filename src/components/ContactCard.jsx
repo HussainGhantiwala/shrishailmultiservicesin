@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Phone, Mail, MapPin, Linkedin, Facebook, Instagram, Send, CheckCircle2 } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Linkedin, Facebook, Instagram, Send, CheckCircle2 } from 'lucide-react';
 
 export default function ContactCard() {
   const [formSubmitted, setFormSubmitted] = useState(false);
@@ -38,13 +38,13 @@ export default function ContactCard() {
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-16 md:mb-20">
           <h2 className="text-xs md:text-sm font-semibold tracking-wider text-brand-primary uppercase mb-3">
-            Get in Touch
+            Get in Touch • संपर्क साधा
           </h2>
           <h3 className="text-3xl md:text-4xl font-bold text-brand-secondary tracking-tight mb-4">
-            Connect with Our Team
+            Connect with Shrishail Multi Services
           </h3>
           <p className="text-brand-muted text-base md:text-lg leading-relaxed">
-            Have questions or want to collaborate? Reach out to us through any of the channels below.
+            Have questions about citizen services, banking transactions, or our business khata portal? Reach out to us directly or visit our center in Kasagi.
           </p>
         </div>
 
@@ -63,60 +63,85 @@ export default function ContactCard() {
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/10 rounded-full blur-2xl pointer-events-none" />
             <div className="absolute bottom-0 left-0 w-48 h-48 bg-brand-accent/5 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="space-y-8 relative z-10">
+            <div className="space-y-7 relative z-10">
               <div>
-                <h4 className="text-xl font-bold mb-3 text-white">Contact Information</h4>
-                <p className="text-sm text-slate-300">We generally respond within 24 hours. Feel free to ring us.</p>
+                <span className="text-xs font-mukta font-medium text-blue-300 block mb-1">
+                  श्रीशैल मल्टिसर्विसेस, कसगी
+                </span>
+                <h4 className="text-xl font-bold mb-2 text-white">Contact Information</h4>
+                <p className="text-xs sm:text-sm text-slate-300">
+                  Proprietor: Prof. Manteshwar Suntnure
+                </p>
               </div>
 
               {/* Info Items List */}
-              <div className="space-y-6">
-                {/* Phone */}
-                <a href="tel:+91XXXXXXXXXX" className="flex items-center gap-4 group">
-                  <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-brand-accent group-hover:bg-brand-primary group-hover:text-white transition-colors duration-300">
-                    <Phone className="w-5 h-5" />
+              <div className="space-y-5">
+                {/* Phone / Mobile */}
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-blue-300 shrink-0 mt-0.5">
+                    <Phone className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-400">Phone</div>
-                    <div className="text-sm md:text-base font-medium group-hover:text-brand-accent transition-colors">+91 XXXXXXXXXX</div>
+                    <div className="text-xs text-slate-400 font-medium">Phone & WhatsApp</div>
+                    <div className="flex flex-col gap-0.5 mt-0.5">
+                      <a href="tel:+917416398023" className="text-sm font-semibold hover:text-blue-300 transition-colors">
+                        +91 74163 98023
+                      </a>
+                      <a href="tel:+919823011223" className="text-sm font-semibold hover:text-blue-300 transition-colors">
+                        +91 98230 11223
+                      </a>
+                    </div>
                   </div>
-                </a>
+                </div>
 
                 {/* Email */}
-                <a href="mailto:info@shrishailmultiservices.in" className="flex items-center gap-4 group">
-                  <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-brand-accent group-hover:bg-brand-primary group-hover:text-white transition-colors duration-300">
-                    <Mail className="w-5 h-5" />
+                <a href="mailto:info@shrishailmultiservices.in" className="flex items-start gap-4 group">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-blue-300 group-hover:bg-brand-primary group-hover:text-white transition-colors shrink-0 mt-0.5">
+                    <Mail className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-xs text-slate-400">Email</div>
-                    <div className="text-sm md:text-base font-medium group-hover:text-brand-accent transition-colors truncate">
+                    <div className="text-xs text-slate-400 font-medium">Email Address</div>
+                    <div className="text-sm font-semibold group-hover:text-blue-300 transition-colors truncate mt-0.5">
                       info@shrishailmultiservices.in
                     </div>
                   </div>
                 </a>
 
                 {/* Location */}
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-brand-accent">
-                    <MapPin className="w-5 h-5" />
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-blue-300 shrink-0 mt-0.5">
+                    <MapPin className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="text-xs text-slate-400">Location</div>
-                    <div className="text-sm md:text-base font-medium">India</div>
+                    <div className="text-xs text-slate-400 font-medium">Center Location</div>
+                    <div className="text-sm font-semibold text-white mt-0.5">Kasagi, Taluka Akkalkot</div>
+                    <div className="text-xs text-slate-300">Dist. Solapur, Maharashtra, India</div>
+                  </div>
+                </div>
+
+                {/* Working Hours */}
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-blue-300 shrink-0 mt-0.5">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 font-medium">Working Hours</div>
+                    <div className="text-sm font-semibold text-white mt-0.5">Monday – Saturday</div>
+                    <div className="text-xs text-slate-300">9:00 AM – 8:00 PM IST</div>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Social Links */}
-            <div className="mt-12 relative z-10">
-              <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-4">Follow Us</h5>
-              <div className="flex gap-3">
+            <div className="mt-8 pt-6 border-t border-white/10 relative z-10">
+              <h5 className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Connect With Us</h5>
+              <div className="flex gap-2.5">
                 <a 
                   href="https://linkedin.com" 
                   target="_blank" 
                   rel="noreferrer"
-                  className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-brand-primary hover:scale-110 transition-all duration-300"
+                  className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center hover:bg-brand-primary transition-all duration-200"
                   aria-label="LinkedIn"
                 >
                   <Linkedin className="w-4 h-4 text-white" />
@@ -125,7 +150,7 @@ export default function ContactCard() {
                   href="https://facebook.com" 
                   target="_blank" 
                   rel="noreferrer"
-                  className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-brand-primary hover:scale-110 transition-all duration-300"
+                  className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center hover:bg-brand-primary transition-all duration-200"
                   aria-label="Facebook"
                 >
                   <Facebook className="w-4 h-4 text-white" />
@@ -134,7 +159,7 @@ export default function ContactCard() {
                   href="https://instagram.com" 
                   target="_blank" 
                   rel="noreferrer"
-                  className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-brand-primary hover:scale-110 transition-all duration-300"
+                  className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center hover:bg-brand-primary transition-all duration-200"
                   aria-label="Instagram"
                 >
                   <Instagram className="w-4 h-4 text-white" />
@@ -149,7 +174,7 @@ export default function ContactCard() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: '-100px' }}
             transition={{ duration: 0.6 }}
-            className="lg:col-span-7 bg-white/40 backdrop-blur-md border border-slate-200/50 rounded-3xl p-8 md:p-10 shadow-lg flex flex-col justify-center"
+            className="lg:col-span-7 bg-white/60 backdrop-blur-md border border-slate-200/80 rounded-3xl p-8 md:p-10 shadow-lg flex flex-col justify-center"
           >
             <AnimatePresence mode="wait">
               {!formSubmitted ? (
@@ -159,7 +184,7 @@ export default function ContactCard() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onSubmit={handleSubmit}
-                  className="space-y-6 text-left"
+                  className="space-y-5 text-left"
                 >
                   <h4 className="text-xl font-bold text-brand-secondary">Send an Inquiry</h4>
                   
@@ -175,8 +200,8 @@ export default function ContactCard() {
                       required
                       value={formData.name}
                       onChange={handleInputChange}
-                      placeholder="e.g. John Doe"
-                      className="w-full px-4 py-3.5 rounded-2xl bg-white/80 border border-slate-200 text-brand-secondary text-sm focus:border-brand-primary focus:bg-white focus:outline-none transition-all duration-300"
+                      placeholder="e.g. Ramesh Patil"
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 text-brand-secondary text-sm focus:border-brand-primary focus:outline-none transition-all duration-200"
                     />
                   </div>
 
@@ -192,15 +217,15 @@ export default function ContactCard() {
                       required
                       value={formData.email}
                       onChange={handleInputChange}
-                      placeholder="e.g. john@example.com"
-                      className="w-full px-4 py-3.5 rounded-2xl bg-white/80 border border-slate-200 text-brand-secondary text-sm focus:border-brand-primary focus:bg-white focus:outline-none transition-all duration-300"
+                      placeholder="e.g. ramesh@example.com"
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 text-brand-secondary text-sm focus:border-brand-primary focus:outline-none transition-all duration-200"
                     />
                   </div>
 
                   {/* Message field */}
                   <div>
                     <label htmlFor="message" className="block text-xs font-semibold text-brand-secondary uppercase mb-2">
-                      Message
+                      Message / Service Query
                     </label>
                     <textarea 
                       id="message" 
@@ -208,8 +233,8 @@ export default function ContactCard() {
                       rows="4"
                       value={formData.message}
                       onChange={handleInputChange}
-                      placeholder="Write your details or questions here..."
-                      className="w-full px-4 py-3.5 rounded-2xl bg-white/80 border border-slate-200 text-brand-secondary text-sm focus:border-brand-primary focus:bg-white focus:outline-none transition-all duration-300 resize-none"
+                      placeholder="Enter the services or details you would like assistance with..."
+                      className="w-full px-4 py-3 rounded-xl bg-white border border-slate-200 text-brand-secondary text-sm focus:border-brand-primary focus:outline-none transition-all duration-200 resize-none"
                     />
                   </div>
 
@@ -218,9 +243,9 @@ export default function ContactCard() {
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.99 }}
                     type="submit"
-                    className="w-full py-4 px-6 rounded-2xl bg-brand-primary text-white font-medium text-sm shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 hover:bg-brand-primary/95 transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer"
+                    className="w-full py-3.5 px-6 rounded-xl bg-brand-primary text-white font-semibold text-sm shadow-md hover:bg-brand-primary/90 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <span>Send Message</span>
+                    <span>Submit Inquiry</span>
                     <Send className="w-4 h-4" />
                   </motion.button>
                 </motion.form>
@@ -232,15 +257,15 @@ export default function ContactCard() {
                   exit={{ opacity: 0 }}
                   className="text-center py-12 flex flex-col items-center justify-center"
                 >
-                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center text-green-600 mb-6">
-                    <CheckCircle2 className="w-8 h-8 animate-bounce" />
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-5">
+                    <CheckCircle2 className="w-7 h-7" />
                   </div>
-                  <h4 className="text-2xl font-bold text-brand-secondary mb-3">Inquiry Sent Successfully!</h4>
-                  <p className="text-brand-muted text-sm max-w-md mx-auto mb-6">
-                    Thank you for connecting. While our platform is undergoing development, our team will process your information and reach back via email soon.
+                  <h4 className="text-xl font-bold text-slate-900 mb-2">Inquiry Sent Successfully</h4>
+                  <p className="text-slate-600 text-sm max-w-md mx-auto mb-6 leading-relaxed">
+                    Thank you for reaching out to Shrishail Multi Services. Our team has received your message and will connect with you promptly.
                   </p>
-                  <div className="text-xs text-brand-primary font-semibold uppercase tracking-widest bg-brand-primary/10 px-4 py-2 rounded-full">
-                    Talk to you soon!
+                  <div className="text-xs text-brand-primary font-semibold uppercase tracking-wider bg-brand-primary/10 px-4 py-2 rounded-full">
+                    We will be in touch shortly
                   </div>
                 </motion.div>
               )}
