@@ -1,0 +1,67 @@
+-- ============================================================
+-- SHRISHAIL MULTI SERVICES — ADMIN BOOTSTRAP INSTRUCTIONS
+-- ============================================================
+--
+-- DO NOT insert directly into auth.users.
+-- Supabase Auth has internal bookkeeping (sessions, identities,
+-- password hashing) that raw INSERT bypasses, causing 500 errors
+-- on subsequent signInWithPassword calls.
+--
+-- ============================================================
+-- STEP 1: Create Admin Auth User via Supabase Dashboard
+-- ============================================================
+--
+--   Option A — Supabase Dashboard (recommended):
+--     1. Go to https://supabase.com/dashboard/project/<your-ref>/auth/users
+--     2. Click "Add user" → "Create new user"
+--     3. Email:    admin@shrishailmultiservices.in
+--        Password: ChangeMe123!
+--     4. Check "Auto Confirm User"
+--     5. Click "Create user"
+--
+--   Option B — Supabase Management API:
+--     Use the service_role key (never expose this on the frontend):
+--
+--     curl -X POST 'https://<project-ref>.supabase.co/auth/v1/admin/users' \
+--       -H "apikey: <service_role_key>" \
+--       -H "Authorization: Bearer <service_role_key>" \
+--       -H "Content-Type: application/json" \
+--       -d '{
+--         "email": "admin@shrishailmultiservices.in",
+--         "password": "ChangeMe123!",
+--         "email_confirm": true,
+--         "user_metadata": {
+--           "name": "Shrishail Owner",
+--           "role": "admin"
+--         }
+--       }'
+--
+--   The on_auth_user_created trigger will auto-create a profiles
+--   row with role = 'admin' (read from user_metadata.role).
+--
+-- ============================================================
+-- STEP 2: Verify & Promote Profile to Admin
+-- ============================================================
+-- After the auth user exists and the trigger has created a
+-- profiles row, run this SQL in the SQL Editor to guarantee
+-- the role is 'admin':
+
+UPDATE public.profiles
+SET role = 'admin'
+WHERE email = 'admin@shrishailmultiservices.in';
+
+-- ============================================================
+-- STEP 3: Verify
+-- ============================================================
+-- SELECT id, email, role FROM public.profiles
+-- WHERE email = 'admin@shrishailmultiservices.in';
+--
+-- Expected:  role = 'admin'
+--
+-- ============================================================
+-- PRODUCTION WARNING
+-- ============================================================
+-- Change the default password immediately after first login.
+-- Email: admin@shrishailmultiservices.in
+-- Default Dev Password: ChangeMe123!
+-- ============================================================

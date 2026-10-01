@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const navLinks = [
   { name: 'Home', href: '#home' },
@@ -10,6 +12,7 @@ const navLinks = [
 ];
 
 export default function Navbar() {
+  const { isAuthenticated } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -80,18 +83,25 @@ export default function Navbar() {
             ))}
           </div>
 
-          {/* Contact Button */}
-          <div className="hidden md:block">
+          {/* Actions: Contact Button & Portal Login */}
+          <div className="hidden md:flex items-center gap-3">
             <motion.a
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               href="#contact"
               onClick={(e) => handleLinkClick(e, '#contact')}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-primary text-white font-medium text-[14px] shadow-lg shadow-brand-primary/15 hover:shadow-xl hover:shadow-brand-primary/25 hover:bg-brand-primary/95 transition-all duration-300"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full border border-brand-primary/20 text-brand-primary font-medium text-[14px] hover:bg-brand-primary/5 transition-all duration-300"
             >
               Contact Us
-              <ArrowRight className="w-4 h-4" />
             </motion.a>
+
+            <Link
+              to={isAuthenticated ? "/portal/dashboard" : "/login"}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-brand-primary text-white font-medium text-[14px] shadow-lg shadow-brand-primary/15 hover:shadow-xl hover:shadow-brand-primary/25 hover:bg-brand-primary/95 transition-all duration-300"
+            >
+              {isAuthenticated ? "Go to Portal" : "Portal Login"}
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -119,7 +129,7 @@ export default function Navbar() {
             transition={{ duration: 0.3 }}
             className="fixed top-[72px] left-0 right-0 z-30 bg-white/95 backdrop-blur-lg border-b border-slate-100 md:hidden shadow-lg"
           >
-            <div className="px-6 py-6 flex flex-col gap-5">
+            <div className="px-6 py-6 flex flex-col gap-4">
               {navLinks.map((link) => (
                 <a
                   key={link.name}
@@ -130,13 +140,22 @@ export default function Navbar() {
                   {link.name}
                 </a>
               ))}
-              <a
-                href="#contact"
-                onClick={(e) => handleLinkClick(e, '#contact')}
-                className="mt-2 w-full text-center py-3 rounded-xl bg-brand-primary text-white font-medium text-sm shadow-md hover:bg-brand-primary/90 transition-colors inline-block"
-              >
-                Contact Us
-              </a>
+              <div className="flex flex-col gap-2.5 pt-2">
+                <a
+                  href="#contact"
+                  onClick={(e) => handleLinkClick(e, '#contact')}
+                  className="w-full text-center py-2.5 rounded-xl border border-brand-primary/30 text-brand-primary font-medium text-sm hover:bg-brand-primary/5 transition-colors"
+                >
+                  Contact Us
+                </a>
+                <Link
+                  to={isAuthenticated ? "/portal/dashboard" : "/login"}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 rounded-xl bg-brand-primary text-white font-medium text-sm shadow-md hover:bg-brand-primary/90 transition-colors"
+                >
+                  {isAuthenticated ? "Go to Portal" : "Portal Login"}
+                </Link>
+              </div>
             </div>
           </motion.div>
         )}
