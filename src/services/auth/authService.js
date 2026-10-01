@@ -281,5 +281,108 @@ export const authService = {
         callback(event, null);
       }
     });
+  },
+
+  /**
+   * Update Profile Details (Full Name and Phone Number)
+   * Persists changes to both public.profiles and auth user metadata
+   */
+  async updateProfile(userId, { name, phone }) {
+    if (!userId) throw new Error('User identifier is missing.');
+
+    const trimmedName = name ? name.trim() : '';
+    if (!trimmedName) {
+      throw new Error('Full name cannot be empty.');
+    }
+
+    let cleanPhone = null;
+    if (phone && phone.trim()) {
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length !== 10 && !(digits.length === 12 && digits.startsWith('91'))) {
+        throw new Error('Please enter a valid 10-digit mobile number.');
+      }
+      cleanPhone = digits.length === 12 ? digits.slice(2) : digits;
+    }
+
+    // 1. Update public.profiles record
+    const { data: updatedProfile, error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        name: trimmedName,
+        phone: cleanPhone,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (profileError) {
+      throw new Error(profileError.message || 'Failed to update user profile.');
+    }
+
+    // 2. Synchronize to Supabase Auth user metadata
+    try {
+      await supabase.auth.updateUser({
+        data: {
+          name: trimmedName,
+          phone: cleanPhone,
+        },
+      });
+    } catch (metaErr) {
+      console.warn('Auth metadata sync notice:', metaErr.message);
+    }
+
+    // 3. If customer record exists for this user, keep customer details in sync
+    try {
+      await supabase
+        .from('customers')
+        .update({
+          name: trimmedName,
+          ...(cleanPhone ? { phone: cleanPhone } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId);
+    } catch (custErr) {
+      // Non-blocking if user is admin/staff
+      console.warn('Customer table sync notice:', custErr.message);
+    }
+
+    // Return the fresh current user object
+    return await this.getCurrentUser();
+  },
+
+  /**
+   * Securely Change Password via Supabase Auth
+   * Validates current credentials by re-authenticating before calling updateUser
+   */
+  async changePassword({ email, currentPassword, newPassword }) {
+    if (!email) throw new Error('Account email is required.');
+    if (!currentPassword) throw new Error('Please enter your current password.');
+    if (!newPassword) throw new Error('Please enter your new password.');
+    if (newPassword.length < 6) {
+      throw new Error('New password must be at least 6 characters in length.');
+    }
+
+    // 1. Verify current credentials against Supabase Auth
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: currentPassword,
+    });
+
+    if (verifyError) {
+      throw new Error('Current password is incorrect. Please verify and try again.');
+    }
+
+    // 2. Perform authoritative password update via Supabase Auth
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (updateError) {
+      const formatted = getAuthErrorMessage(updateError);
+      throw new Error(formatted || 'Failed to update password.');
+    }
+
+    return { success: true };
   }
 };
