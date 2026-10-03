@@ -1,54 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { Menu, Search, Bell, LogOut, Shield, UserCheck, UserPlus, CheckCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Menu, Search, Bell, LogOut, Shield, UserCheck, UserPlus, CheckCheck, Loader2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { notificationsApi } from '../../services/api/notifications';
+import { useNotifications } from '../../context/NotificationContext';
 import { getRelativeTime } from '../../utils/date';
-import { supabase } from '../../lib/supabase';
 
 export default function PortalHeader({ onToggleSidebar }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
 
-  const fetchHeaderNotifications = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const list = await notificationsApi.getNotifications(user.id);
-      setNotifications(list || []);
-      const count = await notificationsApi.getUnreadCount(user.id);
-      setUnreadCount(count || 0);
-    } catch (e) {
-      console.warn('Error fetching header notifications:', e.message);
-    }
-  }, [user?.id]);
-
-  useEffect(() => {
-    fetchHeaderNotifications();
-
-    if (user?.id) {
-      const channel = notificationsApi.subscribeToChanges(user.id, () => {
-        fetchHeaderNotifications();
-      });
-
-      return () => {
-        if (channel) supabase.removeChannel(channel);
-      };
-    }
-  }, [user?.id, fetchHeaderNotifications]);
-
-  const handleMarkAllRead = async () => {
-    if (!user?.id) return;
-    try {
-      await notificationsApi.markAllAsRead(user.id);
-      fetchHeaderNotifications();
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const {
+    notifications,
+    unreadCount,
+    isMarkingAll,
+    markAsRead,
+    markAllAsRead,
+  } = useNotifications();
 
   const handleLogout = () => {
     logout();
@@ -96,12 +65,12 @@ export default function PortalHeader({ onToggleSidebar }) {
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 relative"
+            className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 relative transition-colors"
             aria-label="Notifications"
           >
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] font-bold bg-rose-500 text-white rounded-full leading-none">
+              <span className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] font-bold bg-rose-500 text-white rounded-full leading-none shadow-xs">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
@@ -110,38 +79,69 @@ export default function PortalHeader({ onToggleSidebar }) {
           {showNotifications && (
             <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-xl shadow-lg py-2 z-50 animate-in fade-in zoom-in-95 duration-100">
               <div className="px-4 py-2 border-b border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800">Realtime Notifications</span>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={handleMarkAllRead}
-                    className="text-[11px] text-brand-primary font-semibold hover:underline flex items-center gap-1"
-                  >
-                    <CheckCheck className="w-3 h-3" />
-                    Mark Read
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-800">Realtime Notifications</span>
+                  {unreadCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 bg-blue-100 text-brand-primary rounded-full">
+                      {unreadCount} new
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={markAllAsRead}
+                  disabled={unreadCount === 0 || isMarkingAll}
+                  className={`text-[11px] font-semibold flex items-center gap-1 transition-colors ${
+                    unreadCount === 0 || isMarkingAll
+                      ? 'text-slate-400 cursor-not-allowed'
+                      : 'text-brand-primary hover:underline cursor-pointer'
+                  }`}
+                >
+                  {isMarkingAll ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      <span>Marking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCheck className="w-3.5 h-3.5" />
+                      <span>Mark All as Read</span>
+                    </>
+                  )}
+                </button>
               </div>
 
-              <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+              <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
                 {notifications.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-slate-500">No new notifications.</div>
+                  <div className="p-4 text-center text-xs text-slate-500">No notifications yet.</div>
                 ) : (
-                  notifications.slice(0, 5).map((n) => (
+                  notifications.slice(0, 10).map((n) => (
                     <div
                       key={n.id}
                       onClick={() => {
-                        notificationsApi.markAsRead(n.id);
-                        fetchHeaderNotifications();
+                        if (!n.is_read) {
+                          markAsRead(n.id);
+                        }
                       }}
-                      className={`p-3 hover:bg-slate-50 transition-colors cursor-pointer text-xs ${
-                        !n.is_read ? 'bg-blue-50/40' : ''
+                      className={`p-3 hover:bg-slate-50 transition-colors cursor-pointer text-xs relative ${
+                        !n.is_read ? 'bg-blue-50/50' : ''
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <span className="font-semibold text-slate-800">{n.title}</span>
-                        <span className="text-[10px] text-slate-400">{getRelativeTime(n.created_at)}</span>
+                        <div className="flex items-center gap-1.5">
+                          {!n.is_read && (
+                            <span className="w-2 h-2 rounded-full bg-brand-primary shrink-0" />
+                          )}
+                          <span className={`font-semibold ${!n.is_read ? 'text-slate-900' : 'text-slate-700'}`}>
+                            {n.title}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 shrink-0 ml-2">
+                          {getRelativeTime(n.created_at)}
+                        </span>
                       </div>
-                      <p className="text-[11px] text-slate-600 mt-0.5 line-clamp-2">{n.message}</p>
+                      <p className="text-[11px] text-slate-600 mt-1 line-clamp-2 pl-3.5">
+                        {n.message}
+                      </p>
                     </div>
                   ))
                 )}
@@ -153,7 +153,7 @@ export default function PortalHeader({ onToggleSidebar }) {
                     setShowNotifications(false);
                     navigate('/portal/notifications');
                   }}
-                  className="text-xs text-brand-primary font-semibold hover:underline"
+                  className="text-xs text-brand-primary font-semibold hover:underline cursor-pointer"
                 >
                   View All Notifications →
                 </button>
