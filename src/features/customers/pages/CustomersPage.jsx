@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { customerApi } from '../../../services/api/customers';
-import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound } from 'lucide-react';
+import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound, PiggyBank, Wallet, Receipt } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
 import SearchBar from '../../../components/common/SearchBar';
@@ -13,6 +13,8 @@ import StatCard from '../../../components/common/StatCard';
 import CustomerFormModal from '../components/CustomerFormModal';
 import CustomerDetailModal from '../components/CustomerDetailModal';
 import EnableLoginModal from '../components/EnableLoginModal';
+import PayCustomerBillModal from '../../../components/portal/PayCustomerBillModal';
+import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
 import { formatRupees } from '../../../utils/currency';
 import { formatDate } from '../../../utils/date';
 
@@ -32,6 +34,13 @@ export default function CustomersPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [enableLoginTarget, setEnableLoginTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Bill payment & receipt states
+  const [isPayBillModalOpen, setIsPayBillModalOpen] = useState(false);
+  const [payBillTargetCustomer, setPayBillTargetCustomer] = useState(null);
+  const [receiptTarget, setReceiptTarget] = useState(null);
+  const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isNewReceipt, setIsNewReceipt] = useState(false);
 
   const fetchCustomers = async () => {
     setLoading(true);
@@ -91,6 +100,26 @@ export default function CustomersPage() {
     }
   };
 
+  const handleBillPaymentSuccess = async (billResult, customer) => {
+    await fetchCustomers();
+
+    setReceiptTarget({
+      entry: {
+        id: billResult.savings_transaction_id || billResult.ledger_entry_id,
+        description: billResult.description,
+        amount: billResult.bill_amount,
+        reference_no: billResult.reference_number,
+      },
+      customer,
+      isBillReceipt: true,
+      billPaymentData: billResult,
+      outstandingBalance: billResult.outstanding_balance,
+      savingsBalance: billResult.savings_balance,
+    });
+    setIsNewReceipt(true);
+    setIsReceiptModalOpen(true);
+  };
+
   // ------------------------------------------------------------
   // STEP 11: CUSTOMER PORTAL VIEW (Read-Only Customer Account View)
   // ------------------------------------------------------------
@@ -117,13 +146,19 @@ export default function CustomersPage() {
           description="View your active business account details, total settlements, and balance statements."
         />
 
-        {/* Account Cards */}
+        {/* Account Cards (Independent Outstanding and Savings Systems) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            title="Outstanding Balance"
+            title="Outstanding Dues"
             value={formatRupees(ownCustomer.account?.outstanding_balance || 0)}
-            subtitle="Net Pending Dues"
+            subtitle="Pending Dues (Lending Book)"
             iconBg="bg-rose-50 text-rose-600"
+          />
+          <StatCard
+            title="Customer Savings"
+            value={formatRupees(ownCustomer.savings_account?.savings_balance || 0)}
+            subtitle="Secure Savings (Savings Book)"
+            iconBg="bg-teal-50 text-teal-700"
           />
           <StatCard
             title="Total Payments Received"
@@ -136,12 +171,6 @@ export default function CustomersPage() {
             value={ownCustomer.account?.account_number || 'ACC-1001'}
             subtitle="Unique Account ID"
             iconBg="bg-blue-50 text-blue-600"
-          />
-          <StatCard
-            title="Total Amount Given"
-            value={formatRupees(ownCustomer.account?.total_credit || 0)}
-            subtitle="Cumulative Credit / Services"
-            iconBg="bg-purple-50 text-purple-600"
           />
         </div>
 
@@ -188,13 +217,45 @@ export default function CustomersPage() {
     { header: 'Phone Number', accessorKey: 'phone', className: 'font-mono' },
     { header: 'Reg Date', accessorKey: 'created_at', render: (row) => <span className="font-mono text-slate-600">{formatDate(row.created_at)}</span> },
     {
-      header: 'Outstanding Balance',
+      header: 'Outstanding Dues',
       accessorKey: 'account',
       align: 'right',
       render: (row) => {
-        const bal = row.account?.outstanding_balance || 0;
+        const raw = (Number(row.account?.total_credit || 0)) - (Number(row.account?.total_debit || 0));
+        const bal = row.account?.advance_balance !== undefined && row.account?.advance_balance !== null
+          ? Math.max(0, Number(row.account?.outstanding_balance || 0))
+          : Math.max(0, raw);
         return (
-          <span className={`font-bold ${bal > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+          <span className={`font-bold font-mono ${bal > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+            {bal > 0 ? formatRupees(bal) : '-'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Customer Advance',
+      accessorKey: 'account',
+      align: 'right',
+      render: (row) => {
+        const raw = (Number(row.account?.total_credit || 0)) - (Number(row.account?.total_debit || 0));
+        const adv = row.account?.advance_balance !== undefined && row.account?.advance_balance !== null
+          ? Math.max(0, Number(row.account?.advance_balance || 0))
+          : Math.max(0, -raw);
+        return (
+          <span className={`font-bold font-mono ${adv > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+            {adv > 0 ? `+${formatRupees(adv)}` : '-'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Savings Balance',
+      accessorKey: 'savings_account',
+      align: 'right',
+      render: (row) => {
+        const bal = row.savings_account?.savings_balance || 0;
+        return (
+          <span className="font-bold text-emerald-700 font-mono">
             {formatRupees(bal)}
           </span>
         );
@@ -225,6 +286,19 @@ export default function CustomersPage() {
       align: 'right',
       render: (row) => (
         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          {canManageCustomers && (
+            <button
+              onClick={() => {
+                setPayBillTargetCustomer(row);
+                setIsPayBillModalOpen(true);
+              }}
+              className="p-1 rounded text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 font-bold text-[10px] flex items-center gap-0.5"
+              title="Pay Customer Bill"
+            >
+              <Receipt className="w-3.5 h-3.5" /> Pay Bill
+            </button>
+          )}
+
           {row.status === 'pending_approval' && (
             <button
               onClick={() => handleStatusChange(row.id, 'active')}
@@ -281,15 +355,28 @@ export default function CustomersPage() {
         description="Register customers, review pending approval accounts, enable portal logins, and monitor customer accounts."
         actions={
           canManageCustomers && (
-            <Button
-              icon={Plus}
-              onClick={() => {
-                setCustomerToEdit(null);
-                setIsFormModalOpen(true);
-              }}
-            >
-              Add New Customer
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                icon={Receipt}
+                onClick={() => {
+                  setPayBillTargetCustomer(null);
+                  setIsPayBillModalOpen(true);
+                }}
+                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold"
+              >
+                Pay Customer Bill
+              </Button>
+              <Button
+                icon={Plus}
+                onClick={() => {
+                  setCustomerToEdit(null);
+                  setIsFormModalOpen(true);
+                }}
+              >
+                Add New Customer
+              </Button>
+            </div>
           )
         }
       />
@@ -346,7 +433,48 @@ export default function CustomersPage() {
         customer={selectedCustomer}
         onStatusChange={handleStatusChange}
         onToggleLogin={handleToggleLogin}
+        onPayBill={(cust) => {
+          setPayBillTargetCustomer(cust);
+          setIsPayBillModalOpen(true);
+        }}
       />
+
+      {/* Pay Customer Bill Modal */}
+      <PayCustomerBillModal
+        isOpen={isPayBillModalOpen}
+        onClose={() => {
+          setIsPayBillModalOpen(false);
+          setPayBillTargetCustomer(null);
+        }}
+        customers={customers}
+        selectedCustomerId={payBillTargetCustomer?.id}
+        onSuccess={handleBillPaymentSuccess}
+      />
+
+      {/* Receipt Share Modal */}
+      {receiptTarget && (
+        <ReceiptShareModal
+          isOpen={isReceiptModalOpen}
+          onClose={() => {
+            setIsReceiptModalOpen(false);
+            setReceiptTarget(null);
+            setIsNewReceipt(false);
+          }}
+          entry={receiptTarget.entry}
+          customer={receiptTarget.customer}
+          outstandingBalance={receiptTarget.outstandingBalance}
+          savingsBalance={receiptTarget.savingsBalance}
+          isSavingsReceipt={receiptTarget.isSavingsReceipt}
+          isBillReceipt={receiptTarget.isBillReceipt}
+          billPaymentData={receiptTarget.billPaymentData}
+          isNewEntry={isNewReceipt}
+          onCustomerUpdated={(updatedCust) => {
+            setCustomers((prev) =>
+              prev.map((c) => (c.id === updatedCust.id ? { ...c, ...updatedCust } : c))
+            );
+          }}
+        />
+      )}
 
       {/* Enable Login Modal */}
       <EnableLoginModal

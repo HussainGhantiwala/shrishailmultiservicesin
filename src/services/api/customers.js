@@ -1,17 +1,19 @@
 import { supabase } from '../../lib/supabase';
 import { ledgerApi } from './ledger';
+import { savingsApi } from './savings';
 import { parseCurrency } from '../../utils/currency';
 
 export const customerApi = {
   /**
-   * Get all customers with their customer_accounts details from Supabase DB
+   * Get all customers with their customer_accounts and customer_savings_accounts details from Supabase DB
    */
   async getCustomers(query = '', statusFilter = 'all') {
     let q = supabase
       .from('customers')
       .select(`
         *,
-        account:customer_accounts(*)
+        account:customer_accounts(*),
+        savings_account:customer_savings_accounts(*)
       `)
       .order('created_at', { ascending: false });
 
@@ -29,6 +31,7 @@ export const customerApi = {
     const normalizedData = (data || []).map((cust) => ({
       ...cust,
       account: Array.isArray(cust.account) ? cust.account[0] : cust.account,
+      savings_account: Array.isArray(cust.savings_account) ? cust.savings_account[0] : cust.savings_account,
     }));
 
     return { data: normalizedData, error: null };
@@ -42,7 +45,8 @@ export const customerApi = {
       .from('customers')
       .select(`
         *,
-        account:customer_accounts(*)
+        account:customer_accounts(*),
+        savings_account:customer_savings_accounts(*)
       `)
       .eq('id', id)
       .single();
@@ -52,6 +56,7 @@ export const customerApi = {
       data: {
         ...data,
         account: Array.isArray(data.account) ? data.account[0] : data.account,
+        savings_account: Array.isArray(data.savings_account) ? data.savings_account[0] : data.savings_account,
       },
       error: null,
     };
@@ -177,7 +182,26 @@ export const customerApi = {
       }
     }
 
-    // 3. Return freshly joined customer data with latest account totals
+    // 3. Handle Opening Savings Balance if provided and > 0 (SEPARATE SAVINGS SYSTEM)
+    const rawOpeningSavings = customerData.opening_savings;
+    const openingSavings = parseCurrency(rawOpeningSavings);
+
+    if (openingSavings > 0) {
+      try {
+        await savingsApi.recordCustomerOpeningSavings({
+          customerId: customerRecord.id,
+          amount: openingSavings,
+          notes: customerData.notes
+            ? `Initial opening savings recorded at customer registration. Remarks: ${customerData.notes}`
+            : 'Initial opening savings recorded at customer registration',
+          currentUser,
+        });
+      } catch (e) {
+        console.warn('Error recording opening savings balance:', e.message);
+      }
+    }
+
+    // 4. Return freshly joined customer data with latest account totals
     const { data: updatedCustomer } = await this.getCustomerById(customerRecord.id);
     return { data: updatedCustomer || customerRecord, error: null };
   },

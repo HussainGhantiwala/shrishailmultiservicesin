@@ -8,6 +8,8 @@ export const calculateBalances = (entries = []) => {
 
   let totalCredit = 0;
   let totalDebit = 0;
+  let totalPaid = 0;
+  let totalSavingsPaid = 0;
   let totalAdjustment = 0;
 
   activeEntries.forEach((entry) => {
@@ -16,19 +18,36 @@ export const calculateBalances = (entries = []) => {
       totalCredit += amt;
     } else if (entry.entry_type === 'debit') {
       totalDebit += amt;
+      const isSavingsPayment =
+        entry.payment_method === 'Customer Savings' ||
+        entry.description?.startsWith('Savings Used for Bill Payment') ||
+        entry.notes?.includes('[SAVINGS_PAYMENT]');
+
+      if (isSavingsPayment) {
+        totalSavingsPaid += amt;
+      } else {
+        totalPaid += amt;
+      }
     } else if (entry.entry_type === 'adjustment') {
       totalAdjustment += amt;
     }
   });
 
-  const outstandingBalance = (totalCredit + totalAdjustment) - totalDebit;
+  const rawBalance = (totalCredit + totalAdjustment) - totalDebit;
+  const outstandingBalance = Math.max(0, rawBalance);
+  const advanceBalance = Math.max(0, -rawBalance);
+  const netReceivable = outstandingBalance - advanceBalance;
 
   return {
     totalCredit,
     totalDebit,
-    totalPaid: totalDebit,
+    totalPaid,
+    totalSavingsPaid,
     totalAdjustment,
+    rawBalance,
     outstandingBalance,
+    advanceBalance,
+    netReceivable,
   };
 };
 
@@ -156,44 +175,80 @@ export const ledgerApi = {
       try {
         const { data: acc } = await supabase
           .from('customer_accounts')
-          .select('outstanding_balance, total_paid, total_credit, total_debit')
+          .select('outstanding_balance, advance_balance, total_paid, total_credit, total_debit')
           .eq('customer_id', customerId)
           .maybeSingle();
 
         if (acc) {
+          const raw = Number(acc.total_credit || 0) - Number(acc.total_debit || 0);
+          let out = 0;
+          let adv = 0;
+          if (acc.advance_balance !== undefined && acc.advance_balance !== null) {
+            out = Math.max(0, Number(acc.outstanding_balance || 0));
+            adv = Math.max(0, Number(acc.advance_balance || 0));
+          } else {
+            out = Math.max(0, raw);
+            adv = Math.max(0, -raw);
+          }
+
           balances = {
             totalCredit: Number(acc.total_credit || 0),
             totalDebit: Number(acc.total_debit || 0),
-            totalPaid: Number(acc.total_paid || acc.total_debit || 0),
+            totalPaid: Number(acc.total_paid !== undefined && acc.total_paid !== null ? acc.total_paid : balances.totalPaid),
+            totalSavingsPaid: balances.totalSavingsPaid || 0,
             totalAdjustment: 0,
-            outstandingBalance: Number(acc.outstanding_balance || 0),
+            rawBalance: raw,
+            outstandingBalance: out,
+            advanceBalance: adv,
+            netReceivable: out - adv,
           };
         }
       } catch (e) {
         console.warn('Error fetching customer account authoritative balance:', e.message);
       }
     } else {
-      // If viewing All Customers, compute aggregate stats across all accounts
+      // If viewing All Customers, compute aggregate stats across all accounts:
+      // Customer A's credit MUST NEVER reduce Customer B's outstanding dues.
       try {
-        const { data: accountsData } = await supabase.from('customer_accounts').select('outstanding_balance, total_credit, total_debit');
+        const { data: accountsData } = await supabase
+          .from('customer_accounts')
+          .select('outstanding_balance, advance_balance, total_paid, total_credit, total_debit');
         const { count: activeCount } = await supabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'active');
 
         let globalOutstanding = 0;
+        let globalAdvance = 0;
         let globalCredit = 0;
         let globalDebit = 0;
+        let globalPaid = 0;
 
         (accountsData || []).forEach((acc) => {
-          globalOutstanding += Number(acc.outstanding_balance || 0);
+          const raw = Number(acc.total_credit || 0) - Number(acc.total_debit || 0);
+          let out = 0;
+          let adv = 0;
+          if (acc.advance_balance !== undefined && acc.advance_balance !== null) {
+            out = Math.max(0, Number(acc.outstanding_balance || 0));
+            adv = Math.max(0, Number(acc.advance_balance || 0));
+          } else {
+            out = Math.max(0, raw);
+            adv = Math.max(0, -raw);
+          }
+
+          globalOutstanding += out;
+          globalAdvance += adv;
           globalCredit += Number(acc.total_credit || 0);
           globalDebit += Number(acc.total_debit || 0);
+          globalPaid += Number(acc.total_paid !== undefined && acc.total_paid !== null ? acc.total_paid : acc.total_debit || 0);
         });
 
         balances = {
           totalCredit: globalCredit,
           totalDebit: globalDebit,
-          totalPaid: globalDebit,
+          totalPaid: globalPaid,
+          totalSavingsPaid: balances.totalSavingsPaid || 0,
           totalAdjustment: 0,
           outstandingBalance: globalOutstanding,
+          advanceBalance: globalAdvance,
+          netReceivable: globalOutstanding - globalAdvance,
           activeCustomerCount: activeCount || 0,
         };
       } catch (e) {

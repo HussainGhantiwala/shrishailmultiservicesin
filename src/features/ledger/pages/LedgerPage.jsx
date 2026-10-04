@@ -3,6 +3,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { customerApi } from '../../../services/api/customers';
 import { ledgerApi } from '../../../services/api/ledger';
+import { savingsApi } from '../../../services/api/savings';
 import { formatRupees } from '../../../utils/currency';
 import { formatDate, formatTime } from '../../../utils/date';
 import {
@@ -20,6 +21,10 @@ import {
   CheckCircle2,
   Receipt,
   Calendar,
+  PiggyBank,
+  CreditCard,
+  Wallet,
+  IndianRupee,
 } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
@@ -31,6 +36,7 @@ import LedgerFormModal from '../components/LedgerFormModal';
 import LedgerAuditHistoryModal from '../components/LedgerAuditHistoryModal';
 import ConfirmationDialog from '../../../components/common/ConfirmationDialog';
 import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
+import PayCustomerBillModal from '../../../components/portal/PayCustomerBillModal';
 
 export default function LedgerPage() {
   const { user, isAdmin, isStaff, isCustomer } = useAuth();
@@ -54,6 +60,7 @@ export default function LedgerPage() {
 
   // Modals state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [isPayBillModalOpen, setIsPayBillModalOpen] = useState(false);
   const [entryToEdit, setEntryToEdit] = useState(null);
   const [auditEntityId, setAuditEntityId] = useState(null);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
@@ -123,6 +130,82 @@ export default function LedgerPage() {
         await ledgerApi.updateLedgerEntry(entryToEdit.id, formData, user, 'Updated via Ledger Screen');
         toast.success('Ledger entry updated successfully.');
         await fetchCustomers();
+      } else if (formData.entry_type === 'savings') {
+        const res = await savingsApi.recordSavingsDeposit({
+          customerId: formData.customer_id,
+          amount: formData.amount,
+          description: formData.description,
+          referenceNo: formData.reference_no,
+          paymentMethod: formData.payment_method,
+          notes: formData.notes,
+          currentUser: user,
+        });
+        toast.success('Savings deposit credited to customer savings account.');
+
+        const freshList = await fetchCustomers();
+        const freshCust = freshList.find((c) => c.id === formData.customer_id) || customers.find((c) => c.id === formData.customer_id) || selectedCustomer;
+
+        if (res?.data) {
+          const savingsBal = res.data.savings_balance;
+          const outstandingBal = freshCust?.account?.outstanding_balance !== undefined
+            ? Number(freshCust.account.outstanding_balance)
+            : undefined;
+
+          setReceiptTarget({
+            entry: {
+              ...(res.data.transaction || {}),
+              entry_type: 'savings',
+              amount: formData.amount,
+              description: formData.description,
+              reference_no: formData.reference_no,
+              payment_method: formData.payment_method,
+            },
+            customer: freshCust,
+            savingsBalance: savingsBal,
+            outstandingBalance: outstandingBal,
+            isSavingsReceipt: true,
+          });
+          setIsNewReceipt(true);
+          setIsReceiptModalOpen(true);
+        }
+      } else if (formData.entry_type === 'savings_withdrawal') {
+        const res = await savingsApi.recordSavingsWithdrawal({
+          customerId: formData.customer_id,
+          amount: formData.amount,
+          description: formData.description,
+          referenceNo: formData.reference_no,
+          paymentMethod: formData.payment_method,
+          notes: formData.notes,
+          currentUser: user,
+        });
+        toast.success('Savings withdrawal processed successfully.');
+
+        const freshList = await fetchCustomers();
+        const freshCust = freshList.find((c) => c.id === formData.customer_id) || customers.find((c) => c.id === formData.customer_id) || selectedCustomer;
+
+        if (res?.data) {
+          const savingsBal = res.data.savings_balance;
+          const outstandingBal = freshCust?.account?.outstanding_balance !== undefined
+            ? Number(freshCust.account.outstanding_balance)
+            : undefined;
+
+          setReceiptTarget({
+            entry: {
+              ...(res.data.transaction || {}),
+              entry_type: 'savings_withdrawal',
+              amount: formData.amount,
+              description: formData.description,
+              reference_no: formData.reference_no,
+              payment_method: formData.payment_method,
+            },
+            customer: freshCust,
+            savingsBalance: savingsBal,
+            outstandingBalance: outstandingBal,
+            isWithdrawalReceipt: true,
+          });
+          setIsNewReceipt(true);
+          setIsReceiptModalOpen(true);
+        }
       } else {
         const res = await ledgerApi.addLedgerEntry(formData, user);
         toast.success('New ledger entry recorded.');
@@ -159,6 +242,27 @@ export default function LedgerPage() {
     }
   };
 
+  const handleBillPaymentSuccess = async (billResult, customer) => {
+    await fetchCustomers();
+    await fetchLedger();
+
+    setReceiptTarget({
+      entry: {
+        id: billResult.savings_transaction_id || billResult.ledger_entry_id,
+        description: billResult.description,
+        amount: billResult.bill_amount,
+        reference_no: billResult.reference_number,
+      },
+      customer,
+      isBillReceipt: true,
+      billPaymentData: billResult,
+      outstandingBalance: billResult.outstanding_balance,
+      savingsBalance: billResult.savings_balance,
+    });
+    setIsNewReceipt(true);
+    setIsReceiptModalOpen(true);
+  };
+
   // Soft Delete Handler
   const handleSoftDelete = async () => {
     if (!deleteTargetId) return;
@@ -188,9 +292,23 @@ export default function LedgerPage() {
   };
 
   // Entry Type Badge Renderer
-  const renderTypeBadge = (type, isDeleted) => {
+  const renderTypeBadge = (type, isDeleted, row) => {
     if (isDeleted) {
       return <StatusBadge status="deleted" type="danger" label="DELETED" />;
+    }
+
+    const isSavingsBillPayment =
+      row?.description?.startsWith('Savings Used for Bill Payment') ||
+      row?.notes?.includes('[SAVINGS_PAYMENT]') ||
+      row?.payment_method === 'Customer Savings';
+
+    if (isSavingsBillPayment) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+          <PiggyBank className="w-3 h-3 text-amber-600" />
+          Savings Used for Bill
+        </span>
+      );
     }
 
     switch (type) {
@@ -258,7 +376,7 @@ export default function LedgerPage() {
       header: 'Entry Type',
       accessorKey: 'entry_type',
       align: 'center',
-      render: (row) => renderTypeBadge(row.entry_type, row.is_deleted),
+      render: (row) => renderTypeBadge(row.entry_type, row.is_deleted, row),
     },
     {
       header: 'Payment Method',
@@ -317,11 +435,28 @@ export default function LedgerPage() {
       header: 'Running Balance',
       accessorKey: 'running_balance',
       align: 'right',
-      render: (row) => (
-        <span className={`font-mono font-bold ${row.is_deleted ? 'line-through text-slate-400' : 'text-slate-900'}`}>
-          {formatRupees(row.running_balance || 0)}
-        </span>
-      ),
+      render: (row) => {
+        const bal = Number(row.running_balance || 0);
+        if (bal < 0) {
+          return (
+            <span
+              className={`font-mono font-bold text-emerald-600 ${row.is_deleted ? 'line-through text-slate-400' : ''}`}
+              title="Customer Advance / Credit Balance"
+            >
+              Adv: {formatRupees(Math.abs(bal))}
+            </span>
+          );
+        }
+        return (
+          <span
+            className={`font-mono font-bold ${bal > 0 ? 'text-rose-600' : 'text-slate-900'} ${
+              row.is_deleted ? 'line-through text-slate-400' : ''
+            }`}
+          >
+            {formatRupees(bal)}
+          </span>
+        );
+      },
     },
     {
       header: 'Actions',
@@ -408,22 +543,32 @@ export default function LedgerPage() {
         title="Customer General Ledger"
         description="Single source of truth for customer account credits, debits, adjustments, and running balance timeline."
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" icon={Printer} onClick={() => window.print()}>
               Print Ledger
             </Button>
             {!isCustomer && (
-              <Button
-                icon={Plus}
-                onClick={() => {
-                  setEntryToEdit(null);
-                  setIsFormModalOpen(true);
-                }}
-              >
-                Record Entry
-              </Button>
+              <>
+                <Button
+                  variant="secondary"
+                  icon={Receipt}
+                  onClick={() => setIsPayBillModalOpen(true)}
+                  className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold"
+                >
+                  Pay Customer Bill
+                </Button>
+                <Button
+                  icon={Plus}
+                  onClick={() => {
+                    setEntryToEdit(null);
+                    setIsFormModalOpen(true);
+                  }}
+                >
+                  Record Entry
+                </Button>
+              </>
             )}
-          </>
+          </div>
         }
       />
 
@@ -455,33 +600,81 @@ export default function LedgerPage() {
       )}
 
       {/* Account Balance Summary Header */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Outstanding Balance"
-          value={formatRupees(balances.outstandingBalance)}
-          subtitle={selectedCustomerId === 'all' ? "All Customer Dues" : "Net Pending Customer Dues"}
-          iconBg="bg-rose-50 text-rose-600"
-          className="border-l-4 border-l-rose-500"
-        />
-        <StatCard
-          title="Total Payments Received"
-          value={formatRupees(balances.totalPaid)}
-          subtitle={selectedCustomerId === 'all' ? "All Customer Payments" : "Total Customer Settlements"}
-          iconBg="bg-emerald-50 text-emerald-600"
-        />
-        <StatCard
-          title="Total Amount Given"
-          value={formatRupees(balances.totalCredit)}
-          subtitle={selectedCustomerId === 'all' ? "All Goods / Credit Supplied" : "Cumulative Material / Services Supplied"}
-          iconBg="bg-blue-50 text-blue-600"
-        />
-        <StatCard
-          title={selectedCustomerId === 'all' ? "Active Customers" : "Account Status"}
-          value={selectedCustomerId === 'all' ? `${balances.activeCustomerCount || customers.length} Accounts` : (selectedCustomer.status?.toUpperCase() || 'ACTIVE')}
-          subtitle={selectedCustomerId === 'all' ? "Total Active Business Accounts" : "Ledger Derived State"}
-          iconBg="bg-amber-50 text-amber-600"
-        />
-      </div>
+      {selectedCustomerId === 'all' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard
+            title="Total Outstanding Dues"
+            value={formatRupees(balances.outstandingBalance)}
+            subtitle="All Customer Dues (Positive)"
+            iconBg="bg-rose-50 text-rose-600"
+            className="border-l-4 border-l-rose-500"
+          />
+          <StatCard
+            title="Total Customer Advances"
+            value={formatRupees(balances.advanceBalance || 0)}
+            subtitle="Customer Advance Credits"
+            iconBg="bg-emerald-50 text-emerald-700"
+            className="border-l-4 border-l-emerald-500"
+          />
+          <StatCard
+            title="Net Receivable"
+            value={formatRupees(balances.netReceivable || 0)}
+            subtitle="Total Dues − Advances"
+            iconBg="bg-blue-50 text-blue-600"
+            className="border-l-4 border-l-blue-500"
+          />
+          <StatCard
+            title="Total Payments Received"
+            value={formatRupees(balances.totalPaid)}
+            subtitle="Total Cash Settlements"
+            iconBg="bg-emerald-50 text-emerald-600"
+          />
+          <StatCard
+            title="Total Amount Given"
+            value={formatRupees(balances.totalCredit)}
+            subtitle="All Goods / Credit Supplied"
+            iconBg="bg-slate-100 text-slate-700"
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {balances.advanceBalance > 0 ? (
+            <StatCard
+              title="Customer Advance / Credit"
+              value={formatRupees(balances.advanceBalance)}
+              subtitle="Excess Payment by Customer"
+              iconBg="bg-emerald-50 text-emerald-700"
+              className="border-l-4 border-l-emerald-500"
+            />
+          ) : (
+            <StatCard
+              title="Outstanding Balance"
+              value={formatRupees(balances.outstandingBalance)}
+              subtitle={balances.outstandingBalance > 0 ? "Customer Owes to Business" : "Account Clear (₹0.00)"}
+              iconBg={balances.outstandingBalance > 0 ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-600"}
+              className={balances.outstandingBalance > 0 ? "border-l-4 border-l-rose-500" : "border-l-4 border-l-slate-300"}
+            />
+          )}
+          <StatCard
+            title="Total Payments Received"
+            value={formatRupees(balances.totalPaid)}
+            subtitle="Customer Cash Settlements"
+            iconBg="bg-emerald-50 text-emerald-600"
+          />
+          <StatCard
+            title="Total Amount Given"
+            value={formatRupees(balances.totalCredit)}
+            subtitle="Goods / Credit Supplied"
+            iconBg="bg-blue-50 text-blue-600"
+          />
+          <StatCard
+            title="Account Status"
+            value={selectedCustomer.status?.toUpperCase() || 'ACTIVE'}
+            subtitle="Ledger Derived State"
+            iconBg="bg-amber-50 text-amber-600"
+          />
+        </div>
+      )}
 
       {/* Filter & Search Bar (Step 9) */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs space-y-3">
@@ -609,6 +802,15 @@ export default function LedgerPage() {
         confirmText="Restore Entry"
       />
 
+      {/* Pay Customer Bill Modal */}
+      <PayCustomerBillModal
+        isOpen={isPayBillModalOpen}
+        onClose={() => setIsPayBillModalOpen(false)}
+        customers={customers}
+        selectedCustomerId={selectedCustomerId}
+        onSuccess={handleBillPaymentSuccess}
+      />
+
       {/* Receipt Share Modal */}
       {receiptTarget && (
         <ReceiptShareModal
@@ -621,6 +823,10 @@ export default function LedgerPage() {
           entry={receiptTarget.entry}
           customer={receiptTarget.customer}
           outstandingBalance={receiptTarget.outstandingBalance}
+          savingsBalance={receiptTarget.savingsBalance}
+          isSavingsReceipt={receiptTarget.isSavingsReceipt}
+          isBillReceipt={receiptTarget.isBillReceipt}
+          billPaymentData={receiptTarget.billPaymentData}
           isNewEntry={isNewReceipt}
           onCustomerUpdated={(updatedCust) => {
             setCustomers((prev) =>

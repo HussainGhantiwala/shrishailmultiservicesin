@@ -14,6 +14,9 @@ import {
   FileSpreadsheet,
   Search,
   ChevronDown,
+  PiggyBank,
+  Wallet,
+  Receipt,
 } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
@@ -26,6 +29,7 @@ import StatusBadge from '../../../components/common/StatusBadge';
 import SearchBar from '../../../components/common/SearchBar';
 import { reportsApi } from '../../../services/api/reports';
 import { customerApi } from '../../../services/api/customers';
+import { savingsApi } from '../../../services/api/savings';
 import { formatRupees } from '../../../utils/currency';
 import { formatDate, formatDateTime, getTodayISO } from '../../../utils/date';
 import { exportToCSV, printReport } from '../../../utils/export';
@@ -62,6 +66,11 @@ export default function ReportsPage() {
   const [outstandingData, setOutstandingData] = useState(null);
   const [outstandingSort, setOutstandingSort] = useState('outstanding_desc');
   const [outstandingSearch, setOutstandingSearch] = useState('');
+
+  // State for Customer Savings Report
+  const [savingsReportData, setSavingsReportData] = useState(null);
+  const [savingsTxFilter, setSavingsTxFilter] = useState('all');
+  const [savingsSearch, setSavingsSearch] = useState('');
 
   // Modal State
   const [isTimelineOpen, setIsTimelineOpen] = useState(false);
@@ -128,13 +137,29 @@ export default function ReportsPage() {
     }
   }, [outstandingSort, outstandingSearch, toast]);
 
+  const fetchSavingsReport = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await savingsApi.getSavingsReport(dateRange.startDate, dateRange.endDate, selectedCustomerId);
+      setSavingsReportData(data || {});
+    } catch (err) {
+      setError(err.message || 'Failed to fetch savings report');
+      toast.error('Failed to fetch savings report');
+    } finally {
+      setLoading(false);
+    }
+  }, [dateRange.startDate, dateRange.endDate, selectedCustomerId, toast]);
+
   useEffect(() => {
     if (activeTab === 'ledger') {
       fetchLedgerReport();
     } else if (activeTab === 'outstanding') {
       fetchOutstandingReport();
+    } else if (activeTab === 'savings') {
+      fetchSavingsReport();
     }
-  }, [activeTab, fetchLedgerReport, fetchOutstandingReport]);
+  }, [activeTab, fetchLedgerReport, fetchOutstandingReport, fetchSavingsReport]);
 
   // Realtime updates subscription
   useEffect(() => {
@@ -147,12 +172,18 @@ export default function ReportsPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_accounts' }, () => {
         if (activeTab === 'outstanding') fetchOutstandingReport();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_savings_accounts' }, () => {
+        if (activeTab === 'savings') fetchSavingsReport();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_savings_transactions' }, () => {
+        if (activeTab === 'savings') fetchSavingsReport();
+      })
       .subscribe();
 
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
-  }, [activeTab, fetchLedgerReport, fetchOutstandingReport]);
+  }, [activeTab, fetchLedgerReport, fetchOutstandingReport, fetchSavingsReport]);
 
   // Filter raw entries based on combined client-side filters
   const filteredEntries = useMemo(() => {
@@ -213,6 +244,39 @@ export default function ReportsPage() {
     };
   }, [filteredEntries]);
 
+  // Outstanding Report Summary Totals
+  const outstandingSummary = useMemo(() => {
+    if (!outstandingData || !Array.isArray(outstandingData)) {
+      return { totalOutstanding: 0, totalAdvance: 0, netReceivable: 0, countWithDues: 0, countWithAdvance: 0, totalAccounts: 0 };
+    }
+    let totalOutstanding = 0;
+    let totalAdvance = 0;
+    let countWithDues = 0;
+    let countWithAdvance = 0;
+
+    outstandingData.forEach((row) => {
+      const out = Number(row.account?.outstanding_balance || 0);
+      const adv = Number(row.account?.advance_balance || 0);
+      if (out > 0) {
+        totalOutstanding += out;
+        countWithDues++;
+      }
+      if (adv > 0) {
+        totalAdvance += adv;
+        countWithAdvance++;
+      }
+    });
+
+    return {
+      totalOutstanding,
+      totalAdvance,
+      netReceivable: totalOutstanding - totalAdvance,
+      countWithDues,
+      countWithAdvance,
+      totalAccounts: outstandingData.length,
+    };
+  }, [outstandingData]);
+
   // Export handlers for Ledger Report
   const handleExportLedgerCSV = () => {
     const cols = [
@@ -254,9 +318,11 @@ export default function ReportsPage() {
       { header: 'Customer Name', accessorKey: 'name' },
       { header: 'Phone Number', accessorKey: 'phone' },
       { header: 'Account Number', accessor: (r) => r.account?.account_number || '-' },
-      { header: 'Outstanding Balance (₹)', accessor: (r) => r.account?.outstanding_balance || 0 },
-      { header: 'Total Paid (₹)', accessor: (r) => r.account?.total_paid || 0 },
       { header: 'Total Given (₹)', accessor: (r) => r.account?.total_credit || 0 },
+      { header: 'Total Paid (₹)', accessor: (r) => r.account?.total_paid || 0 },
+      { header: 'Outstanding Dues (₹)', accessor: (r) => r.account?.outstanding_balance || 0 },
+      { header: 'Customer Advance (₹)', accessor: (r) => r.account?.advance_balance || 0 },
+      { header: 'Net Receivable (₹)', accessor: (r) => (Number(r.account?.outstanding_balance || 0) - Number(r.account?.advance_balance || 0)) },
       { header: 'Account Status', accessorKey: 'status' },
     ];
     exportToCSV('Outstanding_Customer_Report', cols, outstandingData || []);
@@ -269,16 +335,78 @@ export default function ReportsPage() {
       { header: 'Account No', render: (r) => r.account?.account_number || '-' },
       { header: 'Total Given', render: (r) => formatRupees(r.account?.total_credit || 0) },
       { header: 'Total Paid', render: (r) => formatRupees(r.account?.total_paid || 0) },
-      { header: 'Outstanding Dues', render: (r) => formatRupees(r.account?.outstanding_balance || 0) },
+      { header: 'Outstanding Dues', render: (r) => (Number(r.account?.outstanding_balance || 0) > 0 ? formatRupees(r.account?.outstanding_balance) : '-') },
+      { header: 'Customer Advance', render: (r) => (Number(r.account?.advance_balance || 0) > 0 ? `+${formatRupees(r.account?.advance_balance)}` : '-') },
       { header: 'Status', render: (r) => (r.status || 'ACTIVE').toUpperCase() },
     ];
-    const totalOut = (outstandingData || []).reduce((acc, c) => acc + Number(c.account?.outstanding_balance || 0), 0);
     const meta = {
-      'Report Type': 'Customer Outstanding Dues Statement',
-      'Total Accounts': (outstandingData || []).length,
-      'Total Outstanding Dues': formatRupees(totalOut),
+      'Report Type': 'Customer Balances & Outstanding Statement',
+      'Total Registered Accounts': outstandingSummary.totalAccounts,
+      'Total Outstanding Dues': formatRupees(outstandingSummary.totalOutstanding),
+      'Total Customer Advances': formatRupees(outstandingSummary.totalAdvance),
+      'Net Receivable': formatRupees(outstandingSummary.netReceivable),
     };
     printReport('Outstanding Customer Statement', meta, cols, outstandingData || []);
+  };
+
+  // Filter raw savings entries based on combined filters
+  const filteredSavingsEntries = useMemo(() => {
+    if (!savingsReportData?.transactions) return [];
+
+    return savingsReportData.transactions.filter((row) => {
+      if (savingsTxFilter !== 'all') {
+        const type = (row.transaction_type || '').toUpperCase();
+        if (savingsTxFilter === 'deposit' && !['DEPOSIT', 'CREDIT'].includes(type)) return false;
+        if (savingsTxFilter === 'withdrawal' && !['WITHDRAWAL', 'DEBIT'].includes(type)) return false;
+        if (savingsTxFilter === 'bill_payment' && type !== 'BILL_PAYMENT') return false;
+        if (savingsTxFilter === 'opening' && type !== 'OPENING') return false;
+      }
+      if (savingsSearch.trim()) {
+        const q = savingsSearch.toLowerCase();
+        const custName = (row.customer_name || '').toLowerCase();
+        const desc = (row.description || '').toLowerCase();
+        const ref = (row.reference_number || '').toLowerCase();
+        if (!custName.includes(q) && !desc.includes(q) && !ref.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [savingsReportData?.transactions, savingsTxFilter, savingsSearch]);
+
+  // Export handlers for Savings Report
+  const handleExportSavingsCSV = () => {
+    const cols = [
+      { header: 'Date & Time', accessor: (r) => formatDateTime(r.created_at) },
+      { header: 'Customer Name', accessorKey: 'customer_name' },
+      { header: 'Phone', accessorKey: 'customer_phone' },
+      { header: 'Transaction Type', accessorKey: 'transaction_type' },
+      { header: 'Payment Method', accessorKey: 'payment_method' },
+      { header: 'Reference No', accessorKey: 'reference_number' },
+      { header: 'Particulars / Description', accessorKey: 'description' },
+      { header: 'Amount (₹)', accessorKey: 'amount' },
+      { header: 'Savings Balance After (₹)', accessorKey: 'balance_after' },
+    ];
+    exportToCSV('Customer_Savings_Report', cols, filteredSavingsEntries);
+  };
+
+  const handlePrintSavings = () => {
+    const cols = [
+      { header: 'Date', render: (r) => formatDate(r.created_at) },
+      { header: 'Customer', accessorKey: 'customer_name' },
+      { header: 'Type', accessorKey: 'transaction_type' },
+      { header: 'Method', accessorKey: 'payment_method' },
+      { header: 'Ref No', render: (r) => r.reference_number || '-' },
+      { header: 'Particulars', accessorKey: 'description' },
+      { header: 'Amount', render: (r) => formatRupees(r.amount) },
+      { header: 'Balance After', render: (r) => formatRupees(r.balance_after) },
+    ];
+    const meta = {
+      'Date Range': `${dateRange.startDate} to ${dateRange.endDate}`,
+      'Total Savings Held': formatRupees(savingsReportData?.total_savings_held || 0),
+      'Total Deposited': formatRupees(savingsReportData?.total_deposited || 0),
+      'Total Withdrawn': formatRupees(savingsReportData?.total_withdrawn || 0),
+      'Customers with Savings': (savingsReportData?.customers_with_savings || 0).toString(),
+    };
+    printReport('Customer Savings Statement Report', meta, cols, filteredSavingsEntries);
   };
 
   // Ledger Table Columns
@@ -361,6 +489,110 @@ export default function ReportsPage() {
     },
   ];
 
+  // Savings Table Columns
+  const savingsColumns = [
+    {
+      header: 'Date & Time',
+      render: (row) => (
+        <span className="text-xs text-slate-600 font-mono whitespace-nowrap">{formatDateTime(row.created_at)}</span>
+      ),
+    },
+    {
+      header: 'Customer',
+      render: (row) => (
+        <div>
+          <div className="font-semibold text-slate-900">{row.customer_name || 'Unknown'}</div>
+          {row.customer_phone && <div className="text-[10px] text-slate-400 font-mono">{row.customer_phone}</div>}
+        </div>
+      ),
+    },
+    {
+      header: 'Transaction Type',
+      align: 'center',
+      render: (row) => {
+        const type = (row.transaction_type || '').toUpperCase();
+        if (type === 'CREDIT' || type === 'DEPOSIT') {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Savings Deposit (+)
+            </span>
+          );
+        } else if (type === 'WITHDRAWAL') {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+              Savings Withdrawal (-)
+            </span>
+          );
+        } else if (type === 'BILL_PAYMENT') {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              Used for Bill Payment
+            </span>
+          );
+        } else if (type === 'DEBIT') {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+              Debit (-)
+            </span>
+          );
+        } else if (type === 'OPENING') {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+              Opening Savings
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-50 text-slate-700 border border-slate-200">
+            {row.transaction_type || 'Adjustment'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Payment Method',
+      render: (row) => (
+        <span className="inline-block px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-[11px] font-semibold text-slate-700">
+          {row.payment_method || 'Cash'}
+        </span>
+      ),
+    },
+    {
+      header: 'Ref No',
+      render: (row) => <span className="text-slate-600 font-mono text-xs">{row.reference_number || '-'}</span>,
+    },
+    {
+      header: 'Particulars',
+      render: (row) => (
+        <span className="text-slate-800 text-xs font-medium max-w-[200px] block truncate" title={row.description}>
+          {row.description || '-'}
+        </span>
+      ),
+    },
+    {
+      header: 'Amount',
+      align: 'right',
+      render: (row) => {
+        const type = (row.transaction_type || '').toUpperCase();
+        const isNegative = ['WITHDRAWAL', 'DEBIT', 'BILL_PAYMENT'].includes(type);
+        return (
+          <span className={`font-mono font-bold ${isNegative ? 'text-rose-600' : 'text-emerald-600'}`}>
+            {isNegative ? '-' : '+'}{formatRupees(row.amount)}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Savings Balance After',
+      align: 'right',
+      render: (row) => (
+        <span className="font-mono font-bold text-slate-900">
+          {formatRupees(row.balance_after)}
+        </span>
+      ),
+    },
+  ];
+
   // Outstanding Table Columns
   const outstandingColumns = [
     {
@@ -381,12 +613,12 @@ export default function ReportsPage() {
       render: (row) => <span className="font-mono text-slate-500">{row.account?.account_number || '-'}</span>,
     },
     {
-      header: 'Total Amount Given',
+      header: 'Total Given',
       align: 'right',
       render: (row) => <span className="font-mono text-slate-700">{formatRupees(row.account?.total_credit || 0)}</span>,
     },
     {
-      header: 'Total Payments Received',
+      header: 'Total Paid',
       align: 'right',
       render: (row) => <span className="font-mono text-emerald-600 font-semibold">{formatRupees(row.account?.total_paid || 0)}</span>,
     },
@@ -396,8 +628,20 @@ export default function ReportsPage() {
       render: (row) => {
         const amt = Number(row.account?.outstanding_balance || 0);
         return (
-          <span className={`font-mono font-bold ${amt > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
-            {formatRupees(amt)}
+          <span className={`font-mono font-bold ${amt > 0 ? 'text-rose-600' : 'text-slate-400'}`}>
+            {amt > 0 ? formatRupees(amt) : '-'}
+          </span>
+        );
+      },
+    },
+    {
+      header: 'Customer Advance',
+      align: 'right',
+      render: (row) => {
+        const adv = Number(row.account?.advance_balance || 0);
+        return (
+          <span className={`font-mono font-bold ${adv > 0 ? 'text-emerald-700' : 'text-slate-400'}`}>
+            {adv > 0 ? `+${formatRupees(adv)}` : '-'}
           </span>
         );
       },
@@ -434,12 +678,21 @@ export default function ReportsPage() {
                   Print Statement
                 </Button>
               </>
-            ) : (
+            ) : activeTab === 'outstanding' ? (
               <>
                 <Button variant="secondary" onClick={handleExportOutstandingCSV} icon={FileSpreadsheet}>
                   Export CSV
                 </Button>
                 <Button variant="primary" onClick={handlePrintOutstanding} icon={Printer}>
+                  Print Statement
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="secondary" onClick={handleExportSavingsCSV} icon={FileSpreadsheet}>
+                  Export CSV
+                </Button>
+                <Button variant="primary" onClick={handlePrintSavings} icon={Printer}>
                   Print Statement
                 </Button>
               </>
@@ -465,6 +718,14 @@ export default function ReportsPage() {
           }`}
         >
           Customer Outstanding Report
+        </button>
+        <button
+          onClick={() => setActiveTab('savings')}
+          className={`pb-3 text-xs font-bold transition-all relative ${
+            activeTab === 'savings' ? 'text-brand-primary border-b-2 border-brand-primary' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          Customer Savings Report
         </button>
       </div>
 
@@ -664,9 +925,44 @@ export default function ReportsPage() {
             )}
           </Card>
         </div>
-      ) : (
+      ) : activeTab === 'outstanding' ? (
         /* Outstanding Report Tab */
         <div className="space-y-6">
+          {/* Summary StatCards for Outstanding & Advances */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              title="Total Outstanding Dues"
+              value={formatRupees(outstandingSummary.totalOutstanding)}
+              subtitle={`${outstandingSummary.countWithDues} accounts owing dues`}
+              icon={TrendingUp}
+              iconBg="bg-rose-50 text-rose-600"
+              className="border-l-4 border-l-rose-500"
+            />
+            <StatCard
+              title="Total Customer Advances"
+              value={formatRupees(outstandingSummary.totalAdvance)}
+              subtitle={`${outstandingSummary.countWithAdvance} accounts with excess credit`}
+              icon={Wallet}
+              iconBg="bg-emerald-50 text-emerald-700"
+              className="border-l-4 border-l-emerald-500"
+            />
+            <StatCard
+              title="Net Receivable"
+              value={formatRupees(outstandingSummary.netReceivable)}
+              subtitle="Total Dues − Customer Advances"
+              icon={IndianRupee}
+              iconBg="bg-blue-50 text-blue-600"
+              className="border-l-4 border-l-blue-500"
+            />
+            <StatCard
+              title="Total Customer Accounts"
+              value={outstandingSummary.totalAccounts.toString()}
+              subtitle="Registered Customers"
+              icon={Users}
+              iconBg="bg-slate-100 text-slate-700"
+            />
+          </div>
+
           <Card className="p-4 shadow-xs border-slate-200 bg-white rounded-xl">
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
               <SearchBar placeholder="Search customer name, phone..." value={outstandingSearch} onChange={setOutstandingSearch} className="w-full sm:w-72" />
@@ -678,6 +974,7 @@ export default function ReportsPage() {
                   className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
                 >
                   <option value="outstanding_desc">Highest Outstanding</option>
+                  <option value="advance_desc">Highest Customer Advance</option>
                   <option value="outstanding_asc">Lowest Outstanding</option>
                   <option value="name_asc">Alphabetically (A-Z)</option>
                   <option value="newest">Newest Customer</option>
@@ -702,6 +999,159 @@ export default function ReportsPage() {
               <EmptyState title="No Outstanding Customer Accounts" description="All customer accounts are clear of pending dues." icon={FileText} />
             ) : (
               <DataTable columns={outstandingColumns} data={outstandingData} />
+            )}
+          </Card>
+        </div>
+      ) : (
+        /* Customer Savings Report Tab */
+        <div className="space-y-6">
+          <Card className="p-4 shadow-xs border-slate-200 bg-white rounded-xl space-y-4">
+            <div className="flex flex-col lg:flex-row gap-4 items-end justify-between border-b border-slate-100 pb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 flex-1 w-full">
+                {/* Customer Selector */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Account</label>
+                  <select
+                    value={selectedCustomerId}
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
+                  >
+                    <option value="all">✔ All Customers</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.phone})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Transaction Type Filter */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Transaction Type</label>
+                  <select
+                    value={savingsTxFilter}
+                    onChange={(e) => setSavingsTxFilter(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="deposit">Savings Deposits (+)</option>
+                    <option value="withdrawal">Savings Withdrawals (-)</option>
+                    <option value="bill_payment">Used for Bill Payment</option>
+                    <option value="opening">Opening Savings Balance</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+              {/* Presets */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[11px] font-bold text-slate-500 mr-1">Period:</span>
+                {['today', 'yesterday', 'thisWeek', 'thisMonth', 'custom'].map((preset) => (
+                  <button
+                    key={preset}
+                    onClick={() => handleDatePresetChange(preset)}
+                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all ${
+                      datePreset === preset
+                        ? 'bg-brand-primary text-white border-brand-primary shadow-2xs'
+                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {preset === 'thisWeek'
+                      ? 'This Week'
+                      : preset === 'thisMonth'
+                      ? 'This Month'
+                      : preset.charAt(0).toUpperCase() + preset.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              {datePreset === 'custom' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={dateRange.startDate}
+                    onChange={(e) => setDateRange((prev) => ({ ...prev, startDate: e.target.value }))}
+                    className="px-2.5 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
+                  />
+                  <span className="text-slate-400">to</span>
+                  <input
+                    type="date"
+                    value={dateRange.endDate}
+                    onChange={(e) => setDateRange((prev) => ({ ...prev, endDate: e.target.value }))}
+                    className="px-2.5 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
+                  />
+                </div>
+              )}
+
+              {/* Search & Action */}
+              <div className="flex items-center gap-3 w-full lg:w-auto justify-end">
+                <SearchBar placeholder="Search description, ref no..." value={savingsSearch} onChange={setSavingsSearch} className="w-48" />
+                <Button variant="primary" onClick={fetchSavingsReport} disabled={loading}>
+                  <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
+                  Generate
+                </Button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Savings Summary Header (5 StatCards) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <StatCard
+              title="Total Savings Held"
+              value={formatRupees(savingsReportData?.total_savings_held || 0)}
+              icon={PiggyBank}
+              iconBg="bg-blue-50 text-blue-600"
+              subtitle="Across active accounts"
+            />
+            <StatCard
+              title="Total Deposited"
+              value={formatRupees(savingsReportData?.total_deposited || 0)}
+              icon={TrendingUp}
+              trend="+ Savings Added"
+              iconBg="bg-emerald-50 text-emerald-600"
+            />
+            <StatCard
+              title="Total Withdrawn"
+              value={formatRupees(savingsReportData?.total_withdrawn || 0)}
+              icon={ArrowDownRight}
+              trend="- Direct Withdrawals"
+              iconBg="bg-purple-50 text-purple-700"
+            />
+            <StatCard
+              title="Used for Bill Payments"
+              value={formatRupees(savingsReportData?.total_bill_payments || 0)}
+              icon={Receipt}
+              trend="- Applied to Bills"
+              iconBg="bg-amber-50 text-amber-700"
+            />
+            <StatCard
+              title="Active Savers"
+              value={(savingsReportData?.customers_with_savings || 0).toString()}
+              icon={Users}
+              iconBg="bg-purple-50 text-purple-600"
+              subtitle="Accounts with balance > ₹0"
+            />
+          </div>
+
+          {/* Savings Transactions Table */}
+          <Card className="shadow-xs border-slate-200 bg-white rounded-xl overflow-hidden p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-800">
+                Itemized Savings Transactions ({filteredSavingsEntries.length} entries)
+              </h3>
+            </div>
+
+            {loading ? (
+              <div className="py-12 flex justify-center">
+                <LoadingSpinner />
+              </div>
+            ) : error ? (
+              <EmptyState title="Error Loading Savings Report" description={error} icon={FileText} actionLabel="Retry" onAction={fetchSavingsReport} />
+            ) : filteredSavingsEntries.length === 0 ? (
+              <EmptyState title="No Savings Transactions Found" description="No savings activity matches the selected filter criteria." icon={PiggyBank} />
+            ) : (
+              <DataTable columns={savingsColumns} data={filteredSavingsEntries} />
             )}
           </Card>
         </div>

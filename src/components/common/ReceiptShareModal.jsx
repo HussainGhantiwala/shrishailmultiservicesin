@@ -9,6 +9,12 @@ import { formatDate, formatTime } from '../../utils/date';
 import {
   generateWhatsAppReceiptMessage,
   generateEmailReceipt,
+  generateWhatsAppSavingsDepositMessage,
+  generateEmailSavingsDeposit,
+  generateWhatsAppSavingsWithdrawalMessage,
+  generateEmailSavingsWithdrawal,
+  generateWhatsAppBillPaymentMessage,
+  generateEmailBillPayment,
   buildWhatsAppUrl,
   buildMailtoUrl,
   buildGmailComposeUrl,
@@ -33,6 +39,8 @@ import {
   FileText,
   AlertTriangle,
   Send,
+  PiggyBank,
+  Wallet,
 } from 'lucide-react';
 
 export default function ReceiptShareModal({
@@ -41,6 +49,10 @@ export default function ReceiptShareModal({
   entry,
   customer,
   outstandingBalance: propOutstandingBalance,
+  savingsBalance: propSavingsBalance,
+  isSavingsReceipt = false,
+  isBillReceipt = false,
+  billPaymentData = null,
   isNewEntry = false,
   onCustomerUpdated,
 }) {
@@ -54,6 +66,14 @@ export default function ReceiptShareModal({
       ? Number(customer.account.outstanding_balance)
       : null
   );
+  const [currentSavingsBalance, setCurrentSavingsBalance] = useState(
+    propSavingsBalance !== undefined && propSavingsBalance !== null
+      ? Number(propSavingsBalance)
+      : customer?.savings_account?.savings_balance !== undefined && customer?.savings_account?.savings_balance !== null
+      ? Number(customer.savings_account.savings_balance)
+      : null
+  );
+
   const [isEditingContact, setIsEditingContact] = useState(false);
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
@@ -67,14 +87,20 @@ export default function ReceiptShareModal({
     setIsEditingContact(false);
     setContactError(null);
 
-    // If explicit balance is provided via props, prioritize it immediately
+    // If explicit balances are provided via props, prioritize them immediately
     if (propOutstandingBalance !== undefined && propOutstandingBalance !== null) {
       setCurrentOutstandingBalance(Number(propOutstandingBalance));
     } else if (customer?.account?.outstanding_balance !== undefined && customer?.account?.outstanding_balance !== null) {
       setCurrentOutstandingBalance(Number(customer.account.outstanding_balance));
     }
 
-    // Always fetch the freshest authoritative customer account record from Supabase
+    if (propSavingsBalance !== undefined && propSavingsBalance !== null) {
+      setCurrentSavingsBalance(Number(propSavingsBalance));
+    } else if (customer?.savings_account?.savings_balance !== undefined && customer?.savings_account?.savings_balance !== null) {
+      setCurrentSavingsBalance(Number(customer.savings_account.savings_balance));
+    }
+
+    // Always fetch the freshest authoritative customer record from Supabase if open
     let isMounted = true;
     const cid = customer?.id || entry?.customer_id;
     if (isOpen && cid) {
@@ -82,8 +108,11 @@ export default function ReceiptShareModal({
         .then((res) => {
           if (isMounted && res?.data) {
             setCurrentCustomer(res.data);
-            if (res.data.account?.outstanding_balance !== undefined && res.data.account?.outstanding_balance !== null) {
+            if (propOutstandingBalance === undefined && res.data.account?.outstanding_balance !== undefined) {
               setCurrentOutstandingBalance(Number(res.data.account.outstanding_balance));
+            }
+            if (propSavingsBalance === undefined && res.data.savings_account?.savings_balance !== undefined) {
+              setCurrentSavingsBalance(Number(res.data.savings_account.savings_balance));
             }
           }
         })
@@ -93,18 +122,20 @@ export default function ReceiptShareModal({
     }
 
     return () => { isMounted = false; };
-  }, [customer, entry, isOpen, propOutstandingBalance]);
+  }, [customer, entry, isOpen, propOutstandingBalance, propSavingsBalance]);
 
-  if (!entry) return null;
+  if (!entry && !billPaymentData) return null;
 
-  const typeLabel = getTransactionTypeLabel(entry.entry_type);
-  const isAmountGiven = entry.entry_type === 'credit' || entry.entry_type === 'opening_balance';
-  const isPaymentReceived = entry.entry_type === 'debit';
+  const isSavingsMode = isSavingsReceipt || entry?.entry_type === 'savings' || entry?.transaction_type === 'CREDIT' || entry?.transaction_type === 'OPENING' || entry?.display_type === 'savings_deposit' || entry?.transaction_type === 'DEPOSIT';
+  const isWithdrawalMode = entry?.display_type === 'savings_withdrawal' || entry?.transaction_type === 'WITHDRAWAL';
+  const typeLabel = getTransactionTypeLabel(entry?.entry_type || entry?.transaction_type || entry?.display_type);
+  const isAmountGiven = entry?.entry_type === 'credit' || entry?.entry_type === 'opening_balance';
+  const isPaymentReceived = entry?.entry_type === 'debit';
 
-  const entryDate = entry.created_at ? formatDate(entry.created_at) : formatDate(new Date().toISOString());
-  const entryTime = entry.created_at ? formatTime(entry.created_at) : formatTime(new Date().toISOString());
-  const refNo = entry.reference_no || `TXN-${(entry.id || '').slice(0, 8).toUpperCase() || 'N/A'}`;
-  const paymentMethod = entry.payment_method
+  const entryDate = entry?.created_at ? formatDate(entry.created_at) : formatDate(new Date().toISOString());
+  const entryTime = entry?.created_at ? formatTime(entry.created_at) : formatTime(new Date().toISOString());
+  const refNo = entry?.reference_no || entry?.reference_number || (isBillReceipt && billPaymentData?.reference_number) || `TXN-${(entry?.id || '').slice(0, 8).toUpperCase() || 'N/A'}`;
+  const paymentMethod = entry?.payment_method
     ? entry.payment_method === 'Other' && entry.other_payment_method
       ? `Other (${entry.other_payment_method})`
       : entry.payment_method
@@ -115,23 +146,30 @@ export default function ReceiptShareModal({
       ? currentOutstandingBalance
       : currentCustomer?.account?.outstanding_balance !== undefined && currentCustomer?.account?.outstanding_balance !== null
       ? Number(currentCustomer.account.outstanding_balance)
-      : entry.running_balance !== undefined && entry.running_balance !== null
+      : entry?.running_balance !== undefined && entry?.running_balance !== null
       ? Number(entry.running_balance)
-      : null;
+      : 0;
+
+  const savingsBal =
+    currentSavingsBalance !== null && currentSavingsBalance !== undefined
+      ? currentSavingsBalance
+      : currentCustomer?.savings_account?.savings_balance !== undefined && currentCustomer?.savings_account?.savings_balance !== null
+      ? Number(currentCustomer.savings_account.savings_balance)
+      : entry?.balance_after !== undefined && entry?.balance_after !== null
+      ? Number(entry.balance_after)
+      : 0;
 
   // Handle Save Contact Details
   const handleSaveContact = async (e) => {
     e?.preventDefault();
     if (!currentCustomer?.id) return;
 
-    // Validate phone if provided
     const cleanDigits = contactPhone.replace(/\D/g, '');
     if (cleanDigits.length > 0 && cleanDigits.length !== 10 && cleanDigits.length !== 12) {
       setContactError('Please enter a valid 10-digit mobile number.');
       return;
     }
 
-    // Validate email if provided
     if (contactEmail && !isValidEmailAddress(contactEmail)) {
       setContactError('Please enter a valid email address.');
       return;
@@ -170,11 +208,38 @@ export default function ReceiptShareModal({
       return;
     }
 
-    const message = generateWhatsAppReceiptMessage({
-      entry,
-      customer: currentCustomer,
-      outstandingBalance: outstandingBal,
-    });
+    let message = '';
+    if (isBillReceipt && billPaymentData) {
+      message = generateWhatsAppBillPaymentMessage({
+        customer: currentCustomer,
+        billAmount: billPaymentData.bill_amount,
+        description: billPaymentData.description,
+        paidFromSavings: billPaymentData.paid_from_savings,
+        remainingBill: billPaymentData.remaining_bill,
+        savingsBalance: billPaymentData.savings_balance,
+        outstandingBalance: billPaymentData.outstanding_balance,
+        paymentSource: billPaymentData.payment_source,
+        referenceNumber: refNo,
+      });
+    } else if (isWithdrawalMode) {
+      message = generateWhatsAppSavingsWithdrawalMessage({
+        entry,
+        customer: currentCustomer,
+        savingsBalance: savingsBal,
+      });
+    } else if (isSavingsMode) {
+      message = generateWhatsAppSavingsDepositMessage({
+        entry,
+        customer: currentCustomer,
+        savingsBalance: savingsBal,
+      });
+    } else {
+      message = generateWhatsAppReceiptMessage({
+        entry,
+        customer: currentCustomer,
+        outstandingBalance: outstandingBal,
+      });
+    }
 
     const url = buildWhatsAppUrl(rawPhone, message);
     window.open(url, '_blank', 'noopener,noreferrer');
@@ -190,11 +255,48 @@ export default function ReceiptShareModal({
       return;
     }
 
-    const { subject, body } = generateEmailReceipt({
-      entry,
-      customer: currentCustomer,
-      outstandingBalance: outstandingBal,
-    });
+    let subject = '';
+    let body = '';
+
+    if (isBillReceipt && billPaymentData) {
+      const emailObj = generateEmailBillPayment({
+        customer: currentCustomer,
+        billAmount: billPaymentData.bill_amount,
+        description: billPaymentData.description,
+        paidFromSavings: billPaymentData.paid_from_savings,
+        remainingBill: billPaymentData.remaining_bill,
+        savingsBalance: billPaymentData.savings_balance,
+        outstandingBalance: billPaymentData.outstanding_balance,
+        paymentSource: billPaymentData.payment_source,
+        referenceNumber: refNo,
+      });
+      subject = emailObj.subject;
+      body = emailObj.body;
+    } else if (isWithdrawalMode) {
+      const emailObj = generateEmailSavingsWithdrawal({
+        entry,
+        customer: currentCustomer,
+        savingsBalance: savingsBal,
+      });
+      subject = emailObj.subject;
+      body = emailObj.body;
+    } else if (isSavingsMode) {
+      const emailObj = generateEmailSavingsDeposit({
+        entry,
+        customer: currentCustomer,
+        savingsBalance: savingsBal,
+      });
+      subject = emailObj.subject;
+      body = emailObj.body;
+    } else {
+      const emailObj = generateEmailReceipt({
+        entry,
+        customer: currentCustomer,
+        outstandingBalance: outstandingBal,
+      });
+      subject = emailObj.subject;
+      body = emailObj.body;
+    }
 
     if (useGmail) {
       const gmailUrl = buildGmailComposeUrl(rawEmail, subject, body);
@@ -211,7 +313,13 @@ export default function ReceiptShareModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Transaction Receipt & Share"
+      title={
+        isBillReceipt
+          ? 'Bill Payment Receipt & Share'
+          : isSavingsMode
+          ? 'Savings Deposit Receipt & Share'
+          : 'Transaction Receipt & Share'
+      }
       footer={
         <div className="flex items-center justify-between w-full">
           <span className="text-[11px] text-slate-400">
@@ -231,7 +339,13 @@ export default function ReceiptShareModal({
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <div className="font-bold text-emerald-900 text-xs">Ledger Entry Recorded Successfully!</div>
+              <div className="font-bold text-emerald-900 text-xs">
+                {isBillReceipt
+                  ? 'Customer Bill Payment Processed Successfully!'
+                  : isSavingsMode
+                  ? 'Savings Deposit Credited Successfully!'
+                  : 'Ledger Entry Recorded Successfully!'}
+              </div>
               <div className="text-[11px] text-emerald-700">
                 You can now share the official receipt with the customer via WhatsApp or Email.
               </div>
@@ -347,79 +461,282 @@ export default function ReceiptShareModal({
           )}
         </div>
 
-        {/* Transaction Summary Box (Receipt Preview) */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-            <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
-              <Receipt className="w-4 h-4 text-brand-primary" />
-              Receipt Details
-            </span>
-            <span className="font-mono text-[11px] text-slate-500">
-              Ref: <strong className="text-slate-700">{refNo}</strong>
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between bg-slate-50/70 p-3 rounded-xl border border-slate-100">
-            <div>
-              <span className="text-[10px] text-slate-500 font-semibold uppercase block">Transaction Amount</span>
-              <span
-                className={`font-mono text-xl font-bold ${
-                  isAmountGiven ? 'text-rose-600' : isPaymentReceived ? 'text-emerald-600' : 'text-slate-900'
-                }`}
-              >
-                {formatRupees(entry.amount)}
+        {/* ==================================================================== */}
+        {/* CASE 1: BILL PAYMENT RECEIPT PREVIEW */}
+        {/* ==================================================================== */}
+        {isBillReceipt && billPaymentData ? (
+          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                <Receipt className="w-4 h-4 text-brand-primary" />
+                Official Bill Payment Receipt
+              </span>
+              <span className="font-mono text-[11px] text-slate-500">
+                Ref: <strong className="text-slate-700">{refNo}</strong>
               </span>
             </div>
 
-            <div className="text-right">
-              <span className="text-[10px] text-slate-500 font-semibold uppercase block mb-0.5">Transaction Type</span>
-              <span
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                  isAmountGiven
-                    ? 'bg-rose-100 text-rose-800'
-                    : isPaymentReceived
+            <div className="flex items-center justify-between bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+              <div>
+                <span className="text-[10px] text-slate-500 font-semibold uppercase block">Total Bill Amount</span>
+                <span className="font-mono text-xl font-bold text-slate-900">
+                  {formatRupees(billPaymentData.bill_amount)}
+                </span>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] text-slate-500 font-semibold uppercase block mb-0.5">Payment Source</span>
+                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                  billPaymentData.payment_source === 'customer_savings'
                     ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-amber-100 text-amber-800'
-                }`}
-              >
-                {isAmountGiven && <ArrowUpRight className="w-3.5 h-3.5 text-rose-600" />}
-                {isPaymentReceived && <ArrowDownRight className="w-3.5 h-3.5 text-emerald-600" />}
-                {entry.entry_type === 'adjustment' && <RefreshCw className="w-3.5 h-3.5 text-amber-600" />}
-                {typeLabel}
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {billPaymentData.payment_source === 'customer_savings' ? (
+                    <><PiggyBank className="w-3.5 h-3.5 text-emerald-600" /> Customer Savings</>
+                  ) : (
+                    <><Wallet className="w-3.5 h-3.5 text-blue-600" /> Owner's Pocket</>
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Paid from Savings</span>
+                <span className="font-bold text-emerald-600 font-mono">
+                  {formatRupees(billPaymentData.paid_from_savings || 0)}
+                </span>
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Remaining to Dues</span>
+                <span className="font-bold text-rose-600 font-mono">
+                  {formatRupees(billPaymentData.remaining_bill || 0)}
+                </span>
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Committed Savings</span>
+                <span className="font-bold text-slate-800 font-mono">
+                  {formatRupees(billPaymentData.savings_balance || 0)}
+                </span>
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Committed Outstanding</span>
+                <span className={`font-bold font-mono ${billPaymentData.outstanding_balance > 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+                  {formatRupees(billPaymentData.outstanding_balance || 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="text-slate-500 text-[10px] block font-semibold uppercase">Bill / Expense Description</span>
+              <span className="font-medium text-slate-800 mt-0.5 block">
+                {billPaymentData.description || 'Customer Expense'}
               </span>
             </div>
           </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
-            <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-              <span className="text-slate-500 block">Date & Time</span>
-              <span className="font-semibold text-slate-800 font-mono">
-                {entryDate} • {entryTime}
+        ) : isSavingsMode ? (
+          /* ==================================================================== */
+          /* CASE 2: SAVINGS DEPOSIT RECEIPT PREVIEW */
+          /* ==================================================================== */
+          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                <PiggyBank className="w-4 h-4 text-emerald-600" />
+                Savings Account Receipt
+              </span>
+              <span className="font-mono text-[11px] text-slate-500">
+                Ref: <strong className="text-slate-700">{refNo}</strong>
               </span>
             </div>
 
-            <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-              <span className="text-slate-500 block">Payment Method</span>
-              <span className="font-semibold text-slate-800">
-                {paymentMethod}
-              </span>
+            <div className="flex items-center justify-between bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
+              <div>
+                <span className="text-[10px] text-emerald-700 font-semibold uppercase block">Amount Credited</span>
+                <span className="font-mono text-xl font-bold text-emerald-700">
+                  +{formatRupees(entry.amount)}
+                </span>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] text-emerald-700 font-semibold uppercase block mb-0.5">Account System</span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                  Customer Savings
+                </span>
+              </div>
             </div>
 
-            <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2 sm:col-span-1">
-              <span className="text-slate-500 block">Outstanding Balance</span>
-              <span className="font-bold text-slate-900 font-mono">
-                {outstandingBal !== null ? formatRupees(outstandingBal) : 'N/A'}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Date & Time</span>
+                <span className="font-semibold text-slate-800 font-mono">
+                  {entryDate} • {entryTime}
+                </span>
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Total Savings Balance</span>
+                <span className="font-bold text-emerald-700 font-mono">
+                  {formatRupees(savingsBal)}
+                </span>
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2 sm:col-span-1">
+                <span className="text-slate-500 block">Outstanding Dues</span>
+                <span className="font-bold text-slate-700 font-mono">
+                  {formatRupees(outstandingBal)} (Unchanged)
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="text-slate-500 text-[10px] block font-semibold uppercase">Particulars</span>
+              <span className="font-medium text-slate-800 mt-0.5 block">
+                {entry.description || 'Savings Deposit'}
               </span>
             </div>
           </div>
+        ) : isWithdrawalMode ? (
+          /* ==================================================================== */
+          /* CASE 2B: SAVINGS WITHDRAWAL RECEIPT PREVIEW */
+          /* ==================================================================== */
+          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                <PiggyBank className="w-4 h-4 text-purple-600" />
+                Savings Withdrawal Receipt
+              </span>
+              <span className="font-mono text-[11px] text-slate-500">
+                Ref: <strong className="text-slate-700">{refNo}</strong>
+              </span>
+            </div>
 
-          <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
-            <span className="text-slate-500 text-[10px] block font-semibold uppercase">Particulars / Description</span>
-            <span className="font-medium text-slate-800 mt-0.5 block">
-              {entry.description || 'No description provided'}
-            </span>
+            <div className="flex items-center justify-between bg-purple-50/50 p-3 rounded-xl border border-purple-100">
+              <div>
+                <span className="text-[10px] text-purple-700 font-semibold uppercase block">Amount Withdrawn</span>
+                <span className="font-mono text-xl font-bold text-purple-700">
+                  -{formatRupees(entry.amount)}
+                </span>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] text-purple-700 font-semibold uppercase block mb-0.5">Classification</span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-purple-100 text-purple-800">
+                  <ArrowDownRight className="w-3.5 h-3.5 text-purple-600" />
+                  Savings Withdrawal
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Date & Time</span>
+                <span className="font-semibold text-slate-800 font-mono">
+                  {entryDate} {entryTime}
+                </span>
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Payment Method</span>
+                <span className="font-semibold text-slate-800 font-mono">
+                  {paymentMethod}
+                </span>
+              </div>
+
+              <div className="p-2 bg-purple-50/60 rounded-lg border border-purple-100">
+                <span className="text-purple-700 block font-semibold">Remaining Savings</span>
+                <span className="font-bold text-purple-800 font-mono">
+                  {formatRupees(savingsBal)}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="text-slate-500 text-[10px] block font-semibold uppercase">Particulars</span>
+              <span className="font-medium text-slate-800 mt-0.5 block">
+                {entry.description || 'Savings Withdrawal'}
+              </span>
+            </div>
           </div>
-        </div>
+        ) : (
+          /* ==================================================================== */
+          /* CASE 3: STANDARD LENDING TRANSACTION RECEIPT PREVIEW */
+          /* ==================================================================== */
+          <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                <Receipt className="w-4 h-4 text-brand-primary" />
+                Receipt Details
+              </span>
+              <span className="font-mono text-[11px] text-slate-500">
+                Ref: <strong className="text-slate-700">{refNo}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+              <div>
+                <span className="text-[10px] text-slate-500 font-semibold uppercase block">Transaction Amount</span>
+                <span
+                  className={`font-mono text-xl font-bold ${
+                    isAmountGiven ? 'text-rose-600' : isPaymentReceived ? 'text-emerald-600' : 'text-slate-900'
+                  }`}
+                >
+                  {formatRupees(entry.amount)}
+                </span>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] text-slate-500 font-semibold uppercase block mb-0.5">Transaction Type</span>
+                <span
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
+                    isAmountGiven
+                      ? 'bg-rose-100 text-rose-800'
+                      : isPaymentReceived
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {isAmountGiven && <ArrowUpRight className="w-3.5 h-3.5 text-rose-600" />}
+                  {isPaymentReceived && <ArrowDownRight className="w-3.5 h-3.5 text-emerald-600" />}
+                  {entry.entry_type === 'adjustment' && <RefreshCw className="w-3.5 h-3.5 text-amber-600" />}
+                  {typeLabel}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-[11px]">
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Date & Time</span>
+                <span className="font-semibold text-slate-800 font-mono">
+                  {entryDate} • {entryTime}
+                </span>
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
+                <span className="text-slate-500 block">Payment Method</span>
+                <span className="font-semibold text-slate-800">
+                  {paymentMethod}
+                </span>
+              </div>
+
+              <div className="p-2 bg-slate-50 rounded-lg border border-slate-100 col-span-2 sm:col-span-1">
+                <span className="text-slate-500 block">Outstanding Balance</span>
+                <span className="font-bold text-slate-900 font-mono">
+                  {outstandingBal !== null ? formatRupees(outstandingBal) : 'N/A'}
+                </span>
+              </div>
+            </div>
+
+            <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-100">
+              <span className="text-slate-500 text-[10px] block font-semibold uppercase">Particulars / Description</span>
+              <span className="font-medium text-slate-800 mt-0.5 block">
+                {entry.description || 'No description provided'}
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* Sharing Actions Section */}
         <div className="space-y-2.5 pt-1">

@@ -3,12 +3,14 @@ import { analyticsApi } from '../../../services/api/analytics';
 import { dashboardApi } from '../../../services/api/dashboard';
 import { PageHeader, Card, LoadingSpinner, EmptyState } from '../../../components/common';
 import { formatRupees } from '../../../utils/currency';
+import { formatDateTime } from '../../../utils/date';
 import { supabase } from '../../../lib/supabase';
-import { TrendingUp, Users, CreditCard, BarChart3, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, Users, CreditCard, BarChart3, ArrowUpRight, ArrowDownRight, PiggyBank, Receipt, ShieldCheck } from 'lucide-react';
 
 const AnalyticsPage = () => {
   const [monthlyTrend, setMonthlyTrend] = useState([]);
   const [customerStats, setCustomerStats] = useState(null);
+  const [savingsStats, setSavingsStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedMonths, setSelectedMonths] = useState(6);
@@ -17,12 +19,14 @@ const AnalyticsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      const [trendData, statsData] = await Promise.all([
+      const [trendData, statsData, savingsData] = await Promise.all([
         analyticsApi.getMonthlyTrend(selectedMonths),
-        analyticsApi.getCustomerStatistics()
+        analyticsApi.getCustomerStatistics(),
+        analyticsApi.getSavingsAnalytics(selectedMonths)
       ]);
       setMonthlyTrend(trendData || []);
       setCustomerStats(statsData || null);
+      setSavingsStats(savingsData || null);
     } catch (err) {
       console.error('Error fetching analytics:', err);
       setError('Failed to load analytics data. Please try again.');
@@ -294,6 +298,192 @@ const AnalyticsPage = () => {
             )}
           </div>
         </Card>
+      </div>
+
+      {/* Customer Savings Analytics Section */}
+      <div className="space-y-6 pt-4">
+        <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+          <PiggyBank className="w-5 h-5 text-emerald-600" />
+          <h2 className="text-base font-bold text-slate-800">Customer Savings Analytics</h2>
+        </div>
+
+        {/* Monthly Savings Movement Trend */}
+        <Card className="rounded-xl shadow-xs border border-slate-200 bg-white overflow-hidden">
+          <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+              <div>
+                <h3 className="text-sm font-semibold text-slate-800">Monthly Savings Flow</h3>
+                <p className="text-xs text-slate-500">Deposits vs Withdrawals vs Used for Bill Payments</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-semibold">
+              <div className="text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
+                Total Held: {formatRupees(savingsStats?.total_savings || 0)}
+              </div>
+              <div className="text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
+                Active Savers: {savingsStats?.active_savers || 0}
+              </div>
+            </div>
+          </div>
+          <div className="p-4 sm:p-5">
+            {!(savingsStats?.monthly_trend || []).length ? (
+              <div className="py-8 text-center text-slate-500 text-sm">No monthly savings activity recorded in this period.</div>
+            ) : (
+              <div className="flex items-end justify-between gap-2 h-64 mt-4 px-2 sm:px-6">
+                {(savingsStats?.monthly_trend || []).map((m, idx) => {
+                  const maxVal = Math.max(
+                    ...savingsStats.monthly_trend.map(t => Math.max(t.deposits || 0, t.withdrawals || 0, t.bill_payments || 0)),
+                    1
+                  );
+                  const depHeight = ((m.deposits || 0) / maxVal) * 100;
+                  const withHeight = ((m.withdrawals || 0) / maxVal) * 100;
+                  const billHeight = ((m.bill_payments || 0) / maxVal) * 100;
+
+                  return (
+                    <div key={idx} className="flex flex-col items-center flex-1 group">
+                      <div className="flex items-end gap-1 w-full max-w-[50px] justify-center h-48 border-b border-slate-200">
+                        <div
+                          style={{ height: `${depHeight}%` }}
+                          title={`Deposits: ${formatRupees(m.deposits)}`}
+                          className="w-1/3 bg-emerald-500 hover:bg-emerald-600 rounded-t transition-all"
+                        />
+                        <div
+                          style={{ height: `${withHeight}%` }}
+                          title={`Withdrawals: ${formatRupees(m.withdrawals)}`}
+                          className="w-1/3 bg-purple-500 hover:bg-purple-600 rounded-t transition-all"
+                        />
+                        <div
+                          style={{ height: `${billHeight}%` }}
+                          title={`Bill Payments: ${formatRupees(m.bill_payments)}`}
+                          className="w-1/3 bg-amber-500 hover:bg-amber-600 rounded-t transition-all"
+                        />
+                      </div>
+                      <span className="text-[10px] sm:text-xs text-slate-500 mt-2 font-medium truncate max-w-full">
+                        {m.month}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex flex-wrap justify-center gap-6 mt-6 pt-4 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-emerald-500 rounded-sm"></div>
+                <span className="text-xs text-slate-600 font-medium">Savings Deposits (+)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-purple-500 rounded-sm"></div>
+                <span className="text-xs text-slate-600 font-medium">Savings Withdrawals (-)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-amber-500 rounded-sm"></div>
+                <span className="text-xs text-slate-600 font-medium">Used for Bill Payments</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* 2-Column Grid: Top Savers & Recent Withdrawals */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Top Savers */}
+          <Card className="rounded-xl shadow-xs border border-slate-200 bg-white overflow-hidden flex flex-col h-full">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <PiggyBank className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-semibold text-slate-800">Top Customers by Savings</h3>
+              </div>
+              <span className="text-xs text-slate-400 font-medium">Highest Vault Balances</span>
+            </div>
+            <div className="p-0 flex-1 overflow-x-auto">
+              {!savingsStats?.top_savers?.length ? (
+                <div className="p-6 text-center text-slate-500 text-sm">No customer savings accounts found.</div>
+              ) : (
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-slate-50/50 text-xs text-slate-500 font-medium border-b border-slate-100">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Rank</th>
+                      <th className="px-4 py-3 font-medium">Customer</th>
+                      <th className="px-4 py-3 font-medium text-right">Savings Balance</th>
+                      <th className="px-4 py-3 font-medium text-right">Total Deposited</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {savingsStats.top_savers.map((cust, idx) => (
+                      <tr key={cust.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-3 text-slate-500 font-medium">#{idx + 1}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-slate-800">{cust.name}</div>
+                          <div className="text-xs text-slate-500">{cust.phone}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-emerald-600 font-mono">
+                          {formatRupees(cust.savings_balance)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-slate-500 font-mono">
+                          {formatRupees(cust.total_deposited || 0)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </Card>
+
+          {/* Recent Withdrawals and Bill Payments */}
+          <Card className="rounded-xl shadow-xs border border-slate-200 bg-white overflow-hidden flex flex-col h-full">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-purple-600" />
+                <h3 className="text-sm font-semibold text-slate-800">Recent Withdrawals & Bill Usages</h3>
+              </div>
+              <span className="text-xs text-slate-400 font-medium">Latest Savings Outflows</span>
+            </div>
+            <div className="p-0 flex-1 overflow-x-auto">
+              {!savingsStats?.recent_withdrawals?.length ? (
+                <div className="p-6 text-center text-slate-500 text-sm">No recent withdrawals or bill payments recorded.</div>
+              ) : (
+                <table className="w-full text-left text-sm whitespace-nowrap">
+                  <thead className="bg-slate-50/50 text-xs text-slate-500 font-medium border-b border-slate-100">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Customer</th>
+                      <th className="px-4 py-3 font-medium">Type</th>
+                      <th className="px-4 py-3 font-medium text-right">Amount</th>
+                      <th className="px-4 py-3 font-medium text-right">Balance After</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {savingsStats.recent_withdrawals.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-slate-800">{item.customer_name}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">{formatDateTime(item.created_at)}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {item.transaction_type === 'BILL_PAYMENT' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                              Bill Payment
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-300">
+                              Withdrawal
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-rose-600 font-mono">
+                          -{formatRupees(item.amount)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-slate-600 font-mono">
+                          {formatRupees(item.balance_after)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </Card>
+        </div>
       </div>
     </div>
   );

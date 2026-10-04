@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import { savingsApi } from './savings';
 
 export const analyticsApi = {
   getMonthlyTrend: async (months) => {
@@ -10,5 +11,9 @@ export const analyticsApi = {
     const { data, error } = await supabase.rpc('get_customer_statistics');
     if (error) throw new Error(error.message);
     return data;
-  }
+  },
+  getSavingsAnalytics: async (months = 6) => {
+    return savingsApi.getSavingsAnalytics(months);
+  },
 };
+

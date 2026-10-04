@@ -16,7 +16,7 @@ import EmptyState from '../../../components/common/EmptyState';
 import { formatRupees } from '../../../utils/currency';
 import { formatDateTime, getRelativeTime } from '../../../utils/date';
 import { supabase } from '../../../lib/supabase';
-import { Plus, Pencil, Trash2, RotateCcw, Filter, Search, IndianRupee, Receipt } from 'lucide-react';
+import { Plus, Pencil, Trash2, RotateCcw, Filter, Search, IndianRupee, Receipt, PiggyBank, ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
 
 export default function TransactionsPage() {
@@ -167,7 +167,7 @@ export default function TransactionsPage() {
     }
     setSubmitting(true);
     try {
-      await transactionsApi.softDeleteTransaction(selectedEntry.id, user, deleteReason);
+      await transactionsApi.softDeleteTransaction(selectedEntry, user, deleteReason);
       toast.success('Transaction deleted successfully');
       setShowDeleteConfirm(false);
       fetchCustomers();
@@ -211,28 +211,62 @@ export default function TransactionsPage() {
     },
     {
       header: 'Type',
-      render: (row) => (
-        <StatusBadge
-          status={
-            row.entry_type === 'credit'
-              ? 'danger'
-              : row.entry_type === 'debit'
-              ? 'success'
-              : row.entry_type === 'adjustment'
-              ? 'warning'
-              : 'info'
-          }
-          label={
-            row.entry_type === 'credit'
-              ? 'AMOUNT GIVEN (+)'
-              : row.entry_type === 'debit'
-              ? 'PAYMENT RECEIVED (-)'
-              : row.entry_type === 'adjustment'
-              ? 'ADJUSTMENT'
-              : 'OPENING BAL (+)'
-          }
-        />
-      ),
+      render: (row) => {
+        if (row.display_type === 'savings_opening') {
+          return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+              <PiggyBank className="w-3 h-3 text-blue-600" />
+              OPENING SAVINGS
+            </span>
+          );
+        }
+        if (row.display_type === 'savings_deposit') {
+          return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              <PiggyBank className="w-3 h-3 text-emerald-600" />
+              SAVINGS DEPOSIT (+)
+            </span>
+          );
+        }
+        if (row.display_type === 'savings_withdrawal') {
+          return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+              <ArrowDownRight className="w-3 h-3 text-purple-600" />
+              SAVINGS WITHDRAWAL (-)
+            </span>
+          );
+        }
+        if (row.display_type === 'savings_bill_payment') {
+          return (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+              <Receipt className="w-3 h-3 text-amber-700" />
+              SAVINGS BILL PAYMENT
+            </span>
+          );
+        }
+        return (
+          <StatusBadge
+            status={
+              row.entry_type === 'credit'
+                ? 'danger'
+                : row.entry_type === 'debit'
+                ? 'success'
+                : row.entry_type === 'adjustment'
+                ? 'warning'
+                : 'info'
+            }
+            label={
+              row.entry_type === 'credit'
+                ? 'AMOUNT GIVEN (+)'
+                : row.entry_type === 'debit'
+                ? 'PAYMENT RECEIVED (-)'
+                : row.entry_type === 'adjustment'
+                ? 'ADJUSTMENT'
+                : 'OPENING BAL (+)'
+            }
+          />
+        );
+      },
     },
     {
       header: 'Payment Method',
@@ -251,14 +285,61 @@ export default function TransactionsPage() {
       render: (row) => row.reference_no || '-',
     },
     {
+      header: 'Balance Impact',
+      render: (row) => {
+        if (row.category === 'savings') {
+          return (
+            <div className="flex flex-col text-[11px]">
+              <span className="text-slate-700 font-medium">
+                Savings: <span className="font-mono text-slate-500">₹{row.savings_balance_before?.toLocaleString('en-IN') || 0}</span> → <strong className="font-mono text-emerald-700">₹{row.savings_balance_after?.toLocaleString('en-IN') || 0}</strong>
+              </span>
+              <span className="text-slate-500 text-[10px]">
+                Outstanding: <span className={row.outstanding_effect.startsWith('-') ? 'text-emerald-600 font-bold' : 'text-slate-600'}>{row.outstanding_effect}</span>
+              </span>
+            </div>
+          );
+        }
+        return (
+          <div className="flex flex-col text-[11px]">
+            <span className="text-slate-700 font-medium">
+              Outstanding: <strong className={row.outstanding_effect.startsWith('+') ? 'text-rose-600' : row.outstanding_effect.startsWith('-') ? 'text-emerald-600' : 'text-slate-600'}>{row.outstanding_effect}</strong>
+            </span>
+            <span className="text-slate-400 text-[10px]">Savings: Unchanged</span>
+          </div>
+        );
+      },
+    },
+    {
       header: 'Amount',
       align: 'right',
       render: (row) => {
-        const isPositive = ['credit', 'opening_balance'].includes(row.entry_type);
-        const colorClass = isPositive ? 'text-emerald-600' : 'text-rose-600';
-        const sign = isPositive ? '+' : '-';
+        const isSavingsPos = ['savings_deposit', 'savings_opening'].includes(row.display_type);
+        const isSavingsNeg = row.display_type === 'savings_withdrawal';
+        const isBillPay = row.display_type === 'savings_bill_payment';
+        const isLendingPos = ['credit', 'opening_balance'].includes(row.entry_type);
+
+        let colorClass = 'text-slate-800';
+        let sign = '+';
+
+        if (isSavingsPos) {
+          colorClass = 'text-emerald-600';
+          sign = '+';
+        } else if (isSavingsNeg) {
+          colorClass = 'text-purple-600';
+          sign = '-';
+        } else if (isBillPay) {
+          colorClass = 'text-amber-600';
+          sign = '-';
+        } else if (isLendingPos) {
+          colorClass = 'text-rose-600';
+          sign = '+';
+        } else {
+          colorClass = 'text-emerald-600';
+          sign = '-';
+        }
+
         return (
-          <span className={`font-semibold ${colorClass}`}>
+          <span className={`font-semibold font-mono ${colorClass}`}>
             {sign} {formatRupees(row.amount)}
           </span>
         );
@@ -275,13 +356,41 @@ export default function TransactionsPage() {
               size="sm"
               onClick={() => {
                 const cust = row.customer || customers.find((c) => c.id === row.customer_id);
-                const authoritativeBalance = cust?.account?.outstanding_balance !== undefined
-                  ? Number(cust.account.outstanding_balance)
-                  : undefined;
+                const isSavingsTx = row.display_type === 'savings_deposit' || row.display_type === 'savings_opening';
+                const isWithdrawalTx = row.display_type === 'savings_withdrawal';
+                const isBillTx = row.display_type === 'savings_bill_payment';
+
                 setReceiptTarget({
                   entry: row,
                   customer: cust,
-                  outstandingBalance: authoritativeBalance,
+                  outstandingBalance: cust?.account?.outstanding_balance,
+                  savingsBalance: row.savings_balance_after || cust?.savings_account?.savings_balance,
+                  isSavingsReceipt: isSavingsTx,
+                  isWithdrawalReceipt: isWithdrawalTx,
+                  isBillReceipt: isBillTx,
+                  billPaymentData: isBillTx ? (() => {
+                    let totalBill = row.amount;
+                    let paidSavings = row.amount;
+                    let remaining = 0;
+                    if (row.notes) {
+                      const totalMatch = row.notes.match(/Total Bill:\s*₹?([\d,.]+)/i);
+                      const paidMatch = row.notes.match(/Paid from Savings:\s*₹?([\d,.]+)/i);
+                      const remMatch = row.notes.match(/Remaining(?: added to dues| ₹)?:\s*₹?([\d,.]+)/i);
+                      if (totalMatch) totalBill = parseFloat(totalMatch[1].replace(/,/g, '')) || totalBill;
+                      if (paidMatch) paidSavings = parseFloat(paidMatch[1].replace(/,/g, '')) || paidSavings;
+                      if (remMatch) remaining = parseFloat(remMatch[1].replace(/,/g, '')) || remaining;
+                    }
+                    return {
+                      bill_amount: totalBill,
+                      description: row.description?.replace(/^Savings Used for Bill Payment:\s*/i, '') || row.description,
+                      paid_from_savings: paidSavings,
+                      remaining_bill: remaining,
+                      savings_balance: row.savings_balance_after,
+                      outstanding_balance: cust?.account?.outstanding_balance,
+                      payment_source: 'customer_savings',
+                      reference_number: row.reference_no,
+                    };
+                  })() : null,
                 });
                 setIsReceiptModalOpen(true);
               }}
@@ -292,7 +401,9 @@ export default function TransactionsPage() {
           )}
           {(isAdmin || canManageCustomers) && !row.is_deleted && (
             <>
-              <Button variant="ghost" size="sm" onClick={() => handleEditOpen(row)} icon={Pencil} />
+              {row.source_table !== 'customer_savings_transactions' && (
+                <Button variant="ghost" size="sm" onClick={() => handleEditOpen(row)} icon={Pencil} />
+              )}
               <Button
                 variant="ghost"
                 size="sm"
@@ -302,7 +413,7 @@ export default function TransactionsPage() {
               />
             </>
           )}
-          {(isAdmin || canManageCustomers) && row.is_deleted && (
+          {(isAdmin || canManageCustomers) && row.is_deleted && row.source_table !== 'customer_savings_transactions' && (
             <Button
               variant="ghost"
               size="sm"
@@ -437,9 +548,12 @@ export default function TransactionsPage() {
                 }}
                 className="bg-transparent text-slate-700 outline-none focus:ring-0 text-xs"
               >
-                <option value="all">All Types</option>
+                <option value="all">All Transactions</option>
                 <option value="credit">Amount Given (+)</option>
                 <option value="debit">Payment Received (-)</option>
+                <option value="savings_deposit">Savings Deposit (+)</option>
+                <option value="savings_withdrawal">Savings Withdrawal (-)</option>
+                <option value="bill_payment">Savings Used for Bill Payment</option>
                 <option value="adjustment">Adjustment</option>
                 <option value="opening_balance">Opening Balance</option>
               </select>

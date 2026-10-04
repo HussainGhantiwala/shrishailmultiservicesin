@@ -64,6 +64,20 @@ export const getTransactionTypeLabel = (entryType) => {
       return 'Opening Balance (+)';
     case 'adjustment':
       return 'Adjustment';
+    case 'savings':
+    case 'savings_deposit':
+    case 'CREDIT':
+    case 'DEPOSIT':
+      return 'Savings Deposit (+)';
+    case 'savings_withdrawal':
+    case 'WITHDRAWAL':
+      return 'Savings Withdrawal (-)';
+    case 'savings_bill_payment':
+    case 'BILL_PAYMENT':
+      return 'Savings Used for Bill Payment';
+    case 'savings_opening':
+    case 'OPENING':
+      return 'Opening Savings (+)';
     default:
       return (entryType || 'Transaction').toUpperCase();
   }
@@ -179,6 +193,296 @@ Thank you,
 Shrishail Multi Services`;
 
   return { subject, body };
+};
+
+/**
+ * Generates WhatsApp message for Savings Deposit
+ */
+export const generateWhatsAppSavingsDepositMessage = ({ entry, customer, savingsBalance }) => {
+  const customerName = customer?.name || 'Valued Customer';
+  const accountNumber = customer?.account?.account_number || customer?.account_number || 'N/A';
+  const dateStr = entry?.created_at ? formatDate(entry.created_at) : formatDate(new Date().toISOString());
+  const timeStr = entry?.created_at ? formatTime(entry.created_at) : formatTime(new Date().toISOString());
+  const refNo = entry?.reference_no || entry?.reference_number || `SAV-${(entry?.id || '').slice(0, 8).toUpperCase() || 'N/A'}`;
+  const amountStr = formatRupees(Number(entry?.amount || 0));
+  const savingsBalStr = formatRupees(Number(savingsBalance || 0));
+
+  return (
+`Shrishail Multi Services
+SAVINGS RECEIPT
+
+Dear ${customerName},
+
+An amount of ${amountStr} has been credited to your savings account.
+
+Account No: ${accountNumber}
+
+Transaction Date: ${dateStr}
+Time: ${timeStr}
+
+Reference No: ${refNo}
+
+Amount Credited: ${amountStr}
+
+Total Savings Balance: ${savingsBalStr}
+
+Thank you,
+Shrishail Multi Services`
+  );
+};
+
+/**
+ * Generates Email for Savings Deposit
+ */
+export const generateEmailSavingsDeposit = ({ entry, customer, savingsBalance }) => {
+  const customerName = customer?.name || 'Valued Customer';
+  const accountNumber = customer?.account?.account_number || customer?.account_number || 'N/A';
+  const dateStr = entry?.created_at ? formatDate(entry.created_at) : formatDate(new Date().toISOString());
+  const timeStr = entry?.created_at ? formatTime(entry.created_at) : formatTime(new Date().toISOString());
+  const refNo = entry?.reference_no || entry?.reference_number || `SAV-${(entry?.id || '').slice(0, 8).toUpperCase() || 'N/A'}`;
+  const amountStr = formatRupees(Number(entry?.amount || 0));
+  const savingsBalStr = formatRupees(Number(savingsBalance || 0));
+
+  const subject = `Savings Receipt — Shrishail Multi Services — ${refNo}`;
+  const body =
+`Shrishail Multi Services
+SAVINGS RECEIPT
+
+Dear ${customerName},
+
+An amount of ${amountStr} has been credited to your savings account with Shrishail Multi Services.
+
+Account Details:
+• Account No: ${accountNumber}
+• Customer Name: ${customerName}
+
+Transaction Summary:
+• Date: ${dateStr}
+• Time: ${timeStr}
+• Reference No: ${refNo}
+• Amount Credited: ${amountStr}
+• Total Savings Balance: ${savingsBalStr}
+
+Thank you,
+Shrishail Multi Services`;
+
+  return { subject, body };
+};
+
+/**
+ * Generates WhatsApp message for Savings Withdrawal
+ */
+export const generateWhatsAppSavingsWithdrawalMessage = ({ entry, customer, savingsBalance }) => {
+  const customerName = customer?.name || 'Valued Customer';
+  const accountNumber = customer?.account?.account_number || customer?.account_number || 'N/A';
+  const dateStr = entry?.created_at ? formatDate(entry.created_at) : formatDate(new Date().toISOString());
+  const timeStr = entry?.created_at ? formatTime(entry.created_at) : formatTime(new Date().toISOString());
+  const refNo = entry?.reference_no || entry?.reference_number || `WDL-${(entry?.id || '').slice(0, 8).toUpperCase() || 'N/A'}`;
+  const amountStr = formatRupees(Number(entry?.amount || 0));
+  const savingsBalStr = formatRupees(Number(savingsBalance || 0));
+
+  return (
+`Shrishail Multi Services
+SAVINGS WITHDRAWAL RECEIPT
+
+Dear ${customerName},
+
+An amount of ${amountStr} has been withdrawn from your savings account.
+
+Account No: ${accountNumber}
+
+Transaction Date: ${dateStr}
+Time: ${timeStr}
+
+Reference No: ${refNo}
+
+Amount Withdrawn: ${amountStr}
+
+Total Savings Remaining: ${savingsBalStr}
+
+Thank you,
+Shrishail Multi Services`
+  );
+};
+
+/**
+ * Generates Email for Savings Withdrawal
+ */
+export const generateEmailSavingsWithdrawal = ({ entry, customer, savingsBalance }) => {
+  const customerName = customer?.name || 'Valued Customer';
+  const accountNumber = customer?.account?.account_number || customer?.account_number || 'N/A';
+  const dateStr = entry?.created_at ? formatDate(entry.created_at) : formatDate(new Date().toISOString());
+  const timeStr = entry?.created_at ? formatTime(entry.created_at) : formatTime(new Date().toISOString());
+  const refNo = entry?.reference_no || entry?.reference_number || `WDL-${(entry?.id || '').slice(0, 8).toUpperCase() || 'N/A'}`;
+  const amountStr = formatRupees(Number(entry?.amount || 0));
+  const savingsBalStr = formatRupees(Number(savingsBalance || 0));
+
+  const subject = `Savings Withdrawal Receipt — Shrishail Multi Services — ${refNo}`;
+  const body =
+`Shrishail Multi Services
+SAVINGS WITHDRAWAL RECEIPT
+
+Dear ${customerName},
+
+An amount of ${amountStr} has been withdrawn from your savings account with Shrishail Multi Services.
+
+Account Details:
+• Account No: ${accountNumber}
+• Customer Name: ${customerName}
+
+Transaction Summary:
+• Date: ${dateStr}
+• Time: ${timeStr}
+• Reference No: ${refNo}
+• Amount Withdrawn: ${amountStr}
+• Remaining Savings Balance: ${savingsBalStr}
+
+Thank you,
+Shrishail Multi Services`;
+
+  return { subject, body };
+};
+
+
+/**
+ * Generates WhatsApp message for Bill Payment (Savings / Owner Pocket / Split)
+ */
+export const generateWhatsAppBillPaymentMessage = ({
+  customer,
+  billAmount,
+  description,
+  paidFromSavings = 0,
+  remainingBill = 0,
+  savingsBalance = 0,
+  outstandingBalance = 0,
+  paymentSource = 'customer_savings',
+  referenceNumber = 'N/A',
+  date = new Date().toISOString(),
+}) => {
+  const customerName = customer?.name || 'Valued Customer';
+  const billAmountStr = formatRupees(Number(billAmount || 0));
+  const savingsBalStr = formatRupees(Number(savingsBalance || 0));
+  const outstandingBalStr = formatRupees(Number(outstandingBalance || 0));
+
+  // Case 1: Fully Paid from Customer Savings (Option 1 & 2)
+  if (paymentSource === 'customer_savings' && Number(remainingBill) === 0) {
+    return (
+`Shrishail Multi Services
+SAVINGS TRANSACTION
+
+Dear ${customerName},
+
+An amount of ${billAmountStr} has been debited from your savings.
+
+Reason:
+${description || 'Bill Payment'}
+
+Amount Debited:
+${billAmountStr}
+
+Total Savings Remaining:
+${savingsBalStr}
+
+Outstanding Balance:
+${outstandingBalStr}
+
+Thank you,
+Shrishail Multi Services`
+    );
+  }
+
+  // Case 2: Partial Savings + Remaining to Outstanding (Option 3)
+  if (paymentSource === 'customer_savings' && Number(remainingBill) > 0) {
+    const paidFromSavingsStr = formatRupees(Number(paidFromSavings || 0));
+    const remainingAmountStr = formatRupees(Number(remainingBill || 0));
+
+    return (
+`Shrishail Multi Services
+BILL PAYMENT RECEIPT
+
+Dear ${customerName},
+
+Bill / Expense:
+${description || 'Bill Payment'}
+
+Total Bill Amount:
+${billAmountStr}
+
+Paid From Savings:
+${paidFromSavingsStr}
+
+Remaining Amount:
+${remainingAmountStr}
+
+Savings Balance:
+${savingsBalStr}
+
+Outstanding Balance:
+${outstandingBalStr}
+
+Thank you,
+Shrishail Multi Services`
+    );
+  }
+
+  // Case 3: Owner's Pocket (Option 4)
+  return (
+`Shrishail Multi Services
+BILL PAYMENT RECEIPT (OWNER'S POCKET)
+
+Dear ${customerName},
+
+Bill / Expense:
+${description || 'Bill Payment'}
+
+Total Bill Amount:
+${billAmountStr}
+
+Payment Source:
+Owner's Pocket (Paid by Shrishail Multi Services)
+
+Amount Added to Outstanding:
+${billAmountStr}
+
+Savings Balance:
+${savingsBalStr}
+
+Current Outstanding Balance:
+${outstandingBalStr}
+
+Thank you,
+Shrishail Multi Services`
+  );
+};
+
+/**
+ * Generates Email for Bill Payment
+ */
+export const generateEmailBillPayment = ({
+  customer,
+  billAmount,
+  description,
+  paidFromSavings = 0,
+  remainingBill = 0,
+  savingsBalance = 0,
+  outstandingBalance = 0,
+  paymentSource = 'customer_savings',
+  referenceNumber = 'N/A',
+}) => {
+  const message = generateWhatsAppBillPaymentMessage({
+    customer,
+    billAmount,
+    description,
+    paidFromSavings,
+    remainingBill,
+    savingsBalance,
+    outstandingBalance,
+    paymentSource,
+    referenceNumber,
+  });
+
+  const subject = `Bill Payment Receipt — ${description || 'Expense'} — Shrishail Multi Services`;
+  return { subject, body: message };
 };
 
 /**

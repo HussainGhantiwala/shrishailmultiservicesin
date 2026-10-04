@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowUpRight, ArrowDownRight, Clock, Plus, ArrowRight, 
   TrendingUp, FileSpreadsheet, Users, UserCheck, AlertCircle, 
-  IndianRupee, UserPlus, ShieldBan, Activity, CheckCircle
+  IndianRupee, UserPlus, ShieldBan, Activity, CheckCircle, PiggyBank, Receipt, Wallet
 } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
@@ -124,6 +124,13 @@ const DashboardPage = () => {
     today_debit = 0,
     today_profit = 0,
     total_outstanding = 0,
+    total_advance = 0,
+    net_receivable = 0,
+    total_savings = 0,
+    today_savings_deposits = 0,
+    today_savings_withdrawals = 0,
+    today_savings_bill_payments = 0,
+    active_savings_customers = 0,
     total_customers = 0,
     active_customers = 0,
     pending_customers = 0,
@@ -150,64 +157,135 @@ const DashboardPage = () => {
         }
       />
 
-      {/* Row 1: Financials */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Today's Amount Given"
-          value={formatRupees(today_credit)}
-          icon={ArrowUpRight}
-          iconBg="bg-rose-50 text-rose-600"
-          subtitle="Credit / Goods Supplied"
-        />
-        <StatCard
-          title="Today's Payments Received"
-          value={formatRupees(today_debit)}
-          icon={ArrowDownRight}
-          iconBg="bg-emerald-50 text-emerald-600"
-          subtitle="Debit Settlements Collected"
-        />
-        <StatCard
-          title="Net Change Today"
-          value={formatRupees(today_profit)}
-          icon={IndianRupee}
-          iconBg="bg-blue-50 text-blue-600"
-          subtitle="Added Outstanding Today"
-        />
-        <StatCard
-          title="Total Outstanding Dues"
-          value={formatRupees(total_outstanding)}
-          icon={TrendingUp}
-          iconBg="bg-amber-50 text-amber-600"
-          subtitle="All Customers Dues"
-        />
+      {/* Row 1: Lending & Outstanding Financials */}
+      <div className="space-y-4">
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Lending & Customer Balances Summary</div>
+        
+        {/* Overall Balances Position */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <StatCard
+            title="Total Outstanding Dues"
+            value={formatRupees(total_outstanding)}
+            icon={TrendingUp}
+            iconBg="bg-rose-50 text-rose-600"
+            subtitle="All Customers Dues (Positive)"
+            className="border-l-4 border-l-rose-500"
+          />
+          <StatCard
+            title="Total Customer Credits/Advances"
+            value={formatRupees(total_advance)}
+            icon={Wallet}
+            iconBg="bg-emerald-50 text-emerald-700"
+            subtitle="Customer Advances (Credit Balances)"
+            className="border-l-4 border-l-emerald-500"
+          />
+          <StatCard
+            title="Net Receivable"
+            value={formatRupees(net_receivable)}
+            icon={IndianRupee}
+            iconBg="bg-blue-50 text-blue-600"
+            subtitle="Total Dues − Customer Advances"
+            className="border-l-4 border-l-blue-500"
+          />
+        </div>
+
+        {/* Today's Operational Lending Flow */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <StatCard
+            title="Today's Amount Given"
+            value={formatRupees(today_credit)}
+            icon={ArrowUpRight}
+            iconBg="bg-rose-50 text-rose-600"
+            subtitle="Credit / Goods Supplied Today"
+          />
+          <StatCard
+            title="Today's Payments Received"
+            value={formatRupees(today_debit)}
+            icon={ArrowDownRight}
+            iconBg="bg-emerald-50 text-emerald-600"
+            subtitle="Cash / Bank Collected Today"
+          />
+          <StatCard
+            title="Net Change Today"
+            value={formatRupees(today_profit)}
+            icon={IndianRupee}
+            iconBg="bg-slate-100 text-slate-700"
+            subtitle="Amount Given − Payments Received"
+          />
+        </div>
       </div>
 
-      {/* Row 2: Customers */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Total Customers"
-          value={total_customers.toString()}
-          icon={Users}
-          iconBg="bg-slate-100 text-slate-600"
-        />
-        <StatCard
-          title="Active Customers"
-          value={active_customers.toString()}
-          icon={UserCheck}
-          iconBg="bg-emerald-50 text-emerald-600"
-        />
-        <StatCard
-          title="Pending Approval"
-          value={pending_customers.toString()}
-          icon={UserPlus}
-          iconBg="bg-amber-50 text-amber-600"
-        />
-        <StatCard
-          title="Blocked"
-          value={blocked_customers.toString()}
-          icon={ShieldBan}
-          iconBg="bg-rose-50 text-rose-600"
-        />
+      {/* Row 2: Customer Savings Overview */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Customer Savings Overview</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard
+            title="Total Savings Held"
+            value={formatRupees(total_savings)}
+            icon={PiggyBank}
+            iconBg="bg-emerald-50 text-emerald-700"
+            subtitle="Total Vault Balance"
+          />
+          <StatCard
+            title="Today's Deposits"
+            value={formatRupees(today_savings_deposits)}
+            icon={ArrowDownRight}
+            iconBg="bg-emerald-50 text-emerald-600"
+            subtitle="Deposited Today"
+          />
+          <StatCard
+            title="Today's Withdrawals"
+            value={formatRupees(today_savings_withdrawals)}
+            icon={ArrowUpRight}
+            iconBg="bg-purple-50 text-purple-700"
+            subtitle="Withdrawn Today"
+          />
+          <StatCard
+            title="Used for Bill Payments"
+            value={formatRupees(today_savings_bill_payments)}
+            icon={Receipt}
+            iconBg="bg-amber-50 text-amber-700"
+            subtitle="Applied to Bills Today"
+          />
+          <StatCard
+            title="Active Savers"
+            value={active_savings_customers.toString()}
+            icon={Users}
+            iconBg="bg-blue-50 text-blue-600"
+            subtitle="Customers with Savings"
+          />
+        </div>
+      </div>
+
+      {/* Row 3: Customers */}
+      <div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Customer Accounts</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Total Customers"
+            value={total_customers.toString()}
+            icon={Users}
+            iconBg="bg-slate-100 text-slate-600"
+          />
+          <StatCard
+            title="Active Customers"
+            value={active_customers.toString()}
+            icon={UserCheck}
+            iconBg="bg-emerald-50 text-emerald-600"
+          />
+          <StatCard
+            title="Pending Approval"
+            value={pending_customers.toString()}
+            icon={UserPlus}
+            iconBg="bg-amber-50 text-amber-600"
+          />
+          <StatCard
+            title="Blocked"
+            value={blocked_customers.toString()}
+            icon={ShieldBan}
+            iconBg="bg-rose-50 text-rose-600"
+          />
+        </div>
       </div>
 
       {/* Pending Customers Section */}

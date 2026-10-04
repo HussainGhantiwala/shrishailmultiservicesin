@@ -16,6 +16,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
     gst_number: '',
     notes: '',
     opening_balance: '',
+    opening_savings: '',
     is_login_enabled: false,
     status: 'active',
   });
@@ -32,6 +33,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
         gst_number: customerToEdit.gst_number || '',
         notes: customerToEdit.notes || '',
         opening_balance: customerToEdit.opening_balance || '',
+        opening_savings: '',
         is_login_enabled: Boolean(customerToEdit.is_login_enabled),
         status: customerToEdit.status || 'active',
       });
@@ -44,6 +46,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
         gst_number: '',
         notes: '',
         opening_balance: '',
+        opening_savings: '',
         is_login_enabled: false,
         status: 'active',
       });
@@ -84,7 +87,19 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
       } else {
         const parsed = parseCurrency(valStr);
         if (parsed < 0) {
-          errs.opening_balance = 'Opening balance cannot be negative';
+          errs.opening_balance = 'Opening due balance cannot be negative';
+        }
+      }
+    }
+
+    if (formData.opening_savings && String(formData.opening_savings).trim()) {
+      const valStr = String(formData.opening_savings).trim();
+      if (/[^0-9.,\s₹$]/.test(valStr)) {
+        errs.opening_savings = 'Enter a valid numeric amount (e.g. 10,000 or 5000)';
+      } else {
+        const parsed = parseCurrency(valStr);
+        if (parsed < 0) {
+          errs.opening_savings = 'Opening savings balance cannot be negative';
         }
       }
     }
@@ -243,31 +258,69 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
           </div>
         </div>
 
-        {/* Opening Balance (Step 7) */}
+        {/* Opening Balances (Two Completely Independent Financial Accounts) */}
         {!customerToEdit && (
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">
-              Optional Opening Balance (₹)
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={formData.opening_balance}
-                onChange={(e) => handleChange('opening_balance', e.target.value)}
-                placeholder="0.00 (e.g. 1,00,000 or 50000)"
-                className={`w-full pl-8 pr-3 py-2 bg-slate-50 border rounded-lg focus:bg-white focus:outline-none font-mono ${
-                  errors.opening_balance ? 'border-rose-500' : 'border-slate-300 focus:border-brand-primary'
-                }`}
-              />
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-200/60 pb-1.5">
+              <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">
+                Initial Account Balances (Optional)
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium">Independent Ledgers</span>
             </div>
-            {errors.opening_balance && (
-              <p className="text-[11px] text-rose-600 mt-0.5">{errors.opening_balance}</p>
-            )}
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              Creating a customer with an opening balance automatically posts an "Opening Balance" ledger entry.
-            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Opening Due Balance */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Opening Due Balance (₹)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.opening_balance}
+                    onChange={(e) => handleChange('opening_balance', e.target.value)}
+                    placeholder="0.00 (e.g. 50,000)"
+                    className={`w-full pl-8 pr-3 py-2 bg-white border rounded-lg focus:outline-none font-mono ${
+                      errors.opening_balance ? 'border-rose-500' : 'border-slate-300 focus:border-brand-primary'
+                    }`}
+                  />
+                </div>
+                {errors.opening_balance && (
+                  <p className="text-[11px] text-rose-600 mt-0.5">{errors.opening_balance}</p>
+                )}
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Amount owed by customer (Lending Ledger).
+                </p>
+              </div>
+
+              {/* Opening Savings Balance */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Opening Savings Balance (₹)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600 font-bold">₹</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={formData.opening_savings}
+                    onChange={(e) => handleChange('opening_savings', e.target.value)}
+                    placeholder="0.00 (e.g. 10,000)"
+                    className={`w-full pl-8 pr-3 py-2 bg-white border rounded-lg focus:outline-none font-mono ${
+                      errors.opening_savings ? 'border-rose-500' : 'border-slate-300 focus:border-emerald-600'
+                    }`}
+                  />
+                </div>
+                {errors.opening_savings && (
+                  <p className="text-[11px] text-rose-600 mt-0.5">{errors.opening_savings}</p>
+                )}
+                <p className="text-[10px] text-slate-400 mt-0.5">
+                  Customer savings held by business (Savings Ledger).
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
