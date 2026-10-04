@@ -27,7 +27,9 @@ import {
   FileText,
   Clock,
   Plus,
+  Printer,
 } from 'lucide-react';
+import PrintStatementModal from '../../../components/portal/PrintStatementModal';
 
 export default function CustomerDetailModal({
   isOpen,
@@ -45,6 +47,7 @@ export default function CustomerDetailModal({
   const [loadingSavings, setLoadingSavings] = useState(false);
   const [selectedTxForReceipt, setSelectedTxForReceipt] = useState(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen && customer?.id) {
@@ -94,9 +97,18 @@ export default function CustomerDetailModal({
             <div className="text-[11px] text-slate-400">
               Account No: <strong className="font-mono text-slate-700">{account.account_number || 'ACC-1001'}</strong>
             </div>
-            <Button variant="secondary" onClick={onClose}>
-              Close
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                icon={Printer}
+                onClick={() => setIsPrintModalOpen(true)}
+              >
+                Print Statement
+              </Button>
+              <Button variant="secondary" onClick={onClose}>
+                Close
+              </Button>
+            </div>
           </div>
         }
       >
@@ -508,6 +520,15 @@ export default function CustomerDetailModal({
                 {customer.is_login_enabled ? 'Disable Login' : 'Enable Login'}
               </Button>
 
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={Printer}
+                onClick={() => setIsPrintModalOpen(true)}
+              >
+                Print Statement
+              </Button>
+
               {isAdmin && (
                 <Button variant="secondary" size="sm" icon={KeyRound} onClick={handleResetPassword}>
                   Reset Password
@@ -545,6 +566,15 @@ export default function CustomerDetailModal({
           isWithdrawalReceipt={selectedTxForReceipt.transaction_type === 'WITHDRAWAL'}
         />
       )}
+
+      {/* Print Statement Modal */}
+      <PrintStatementModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        customer={customer}
+        customers={customer ? [customer] : []}
+        initialStatementType="lending"
+      />
     </>
   );
 }

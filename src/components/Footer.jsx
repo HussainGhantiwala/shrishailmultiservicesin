@@ -146,7 +146,7 @@ export default function Footer() {
             <div className="space-y-3 text-xs text-slate-400 mb-6">
               <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                <span>Kasagi, Taluka Akkalkot, Dist. Solapur, Maharashtra</span>
+                <span>Kasagi, Akkalkot, Dist. Solapur, Maharashtra, India</span>
               </div>
 
               <div className="flex items-start gap-2.5">

@@ -37,11 +37,13 @@ import LedgerAuditHistoryModal from '../components/LedgerAuditHistoryModal';
 import ConfirmationDialog from '../../../components/common/ConfirmationDialog';
 import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
 import PayCustomerBillModal from '../../../components/portal/PayCustomerBillModal';
+import PrintStatementModal from '../../../components/portal/PrintStatementModal';
 
 export default function LedgerPage() {
   const { user, isAdmin, isStaff, isCustomer } = useAuth();
   const toast = useToast();
 
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [ledgerData, setLedgerData] = useState([]);
@@ -544,8 +546,8 @@ export default function LedgerPage() {
         description="Single source of truth for customer account credits, debits, adjustments, and running balance timeline."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" icon={Printer} onClick={() => window.print()}>
-              Print Ledger
+            <Button variant="secondary" icon={Printer} onClick={() => setIsPrintModalOpen(true)}>
+              Print Statement
             </Button>
             {!isCustomer && (
               <>
@@ -835,6 +837,15 @@ export default function LedgerPage() {
           }}
         />
       )}
+
+      {/* Print Statement Modal */}
+      <PrintStatementModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        customer={selectedCustomerId ? customers.find((c) => c.id === selectedCustomerId) : null}
+        customers={customers}
+        initialStatementType="lending"
+      />
     </div>
   );
 }

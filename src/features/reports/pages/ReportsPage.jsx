@@ -35,11 +35,14 @@ import { formatDate, formatDateTime, getTodayISO } from '../../../utils/date';
 import { exportToCSV, printReport } from '../../../utils/export';
 import { useToast } from '../../../context/ToastContext';
 import ReportTimelineModal from '../components/ReportTimelineModal';
+import PrintStatementModal from '../../../components/portal/PrintStatementModal';
 import { supabase } from '../../../lib/supabase';
 
 export default function ReportsPage() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState('ledger');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+  const [printStatementInitialType, setPrintStatementInitialType] = useState('lending');
 
   // Customers list for dropdown
   const [customers, setCustomers] = useState([]);
@@ -293,23 +296,8 @@ export default function ReportsPage() {
   };
 
   const handlePrintLedger = () => {
-    const cols = [
-      { header: 'Date', render: (r) => formatDate(r.created_at) },
-      { header: 'Customer', accessorKey: 'customer_name' },
-      { header: 'Type', accessorKey: 'entry_type' },
-      { header: 'Method', render: (r) => r.payment_method || 'Cash' },
-      { header: 'Ref No', accessorKey: 'reference_no' },
-      { header: 'Particulars', accessorKey: 'description' },
-      { header: 'Amount', render: (r) => formatRupees(r.amount) },
-    ];
-    const meta = {
-      'Date Range': `${dateRange.startDate} to ${dateRange.endDate}`,
-      'Total Amount Given': formatRupees(dynamicTotals.total_credit),
-      'Total Payments Received': formatRupees(dynamicTotals.total_debit),
-      'Net Outstanding': formatRupees(dynamicTotals.net_balance),
-      'Total Transactions': dynamicTotals.entry_count,
-    };
-    printReport('Ledger Statement Report', meta, cols, filteredEntries);
+    setPrintStatementInitialType('lending');
+    setIsPrintModalOpen(true);
   };
 
   // Export handlers for Outstanding Report
@@ -389,24 +377,8 @@ export default function ReportsPage() {
   };
 
   const handlePrintSavings = () => {
-    const cols = [
-      { header: 'Date', render: (r) => formatDate(r.created_at) },
-      { header: 'Customer', accessorKey: 'customer_name' },
-      { header: 'Type', accessorKey: 'transaction_type' },
-      { header: 'Method', accessorKey: 'payment_method' },
-      { header: 'Ref No', render: (r) => r.reference_number || '-' },
-      { header: 'Particulars', accessorKey: 'description' },
-      { header: 'Amount', render: (r) => formatRupees(r.amount) },
-      { header: 'Balance After', render: (r) => formatRupees(r.balance_after) },
-    ];
-    const meta = {
-      'Date Range': `${dateRange.startDate} to ${dateRange.endDate}`,
-      'Total Savings Held': formatRupees(savingsReportData?.total_savings_held || 0),
-      'Total Deposited': formatRupees(savingsReportData?.total_deposited || 0),
-      'Total Withdrawn': formatRupees(savingsReportData?.total_withdrawn || 0),
-      'Customers with Savings': (savingsReportData?.customers_with_savings || 0).toString(),
-    };
-    printReport('Customer Savings Statement Report', meta, cols, filteredSavingsEntries);
+    setPrintStatementInitialType('full');
+    setIsPrintModalOpen(true);
   };
 
   // Ledger Table Columns
@@ -1163,6 +1135,15 @@ export default function ReportsPage() {
         onClose={() => setIsTimelineOpen(false)}
         entries={filteredEntries}
         title={`Chronological Timeline (${dateRange.startDate} to ${dateRange.endDate})`}
+      />
+
+      {/* Print Statement Modal */}
+      <PrintStatementModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        customer={selectedCustomerId !== 'all' ? customers.find((c) => c.id === selectedCustomerId) : null}
+        customers={customers}
+        initialStatementType={printStatementInitialType}
       />
     </div>
   );

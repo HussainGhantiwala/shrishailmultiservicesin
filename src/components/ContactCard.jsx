@@ -114,7 +114,7 @@ export default function ContactCard() {
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 font-medium">Center Location</div>
-                    <div className="text-sm font-semibold text-white mt-0.5">Kasagi, Taluka Akkalkot</div>
+                    <div className="text-sm font-semibold text-white mt-0.5">Kasagi, Akkalkot</div>
                     <div className="text-xs text-slate-300">Dist. Solapur, Maharashtra, India</div>
                   </div>
                 </div>

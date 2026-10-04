@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { customerApi } from '../../../services/api/customers';
-import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound, PiggyBank, Wallet, Receipt } from 'lucide-react';
+import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound, PiggyBank, Wallet, Receipt, Printer } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
 import SearchBar from '../../../components/common/SearchBar';
@@ -15,6 +15,7 @@ import CustomerDetailModal from '../components/CustomerDetailModal';
 import EnableLoginModal from '../components/EnableLoginModal';
 import PayCustomerBillModal from '../../../components/portal/PayCustomerBillModal';
 import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
+import PrintStatementModal from '../../../components/portal/PrintStatementModal';
 import { formatRupees } from '../../../utils/currency';
 import { formatDate } from '../../../utils/date';
 
@@ -34,6 +35,10 @@ export default function CustomersPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [enableLoginTarget, setEnableLoginTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Print Statement state
+  const [isPrintStatementModalOpen, setIsPrintStatementModalOpen] = useState(false);
+  const [printStatementCustomer, setPrintStatementCustomer] = useState(null);
 
   // Bill payment & receipt states
   const [isPayBillModalOpen, setIsPayBillModalOpen] = useState(false);
@@ -144,6 +149,18 @@ export default function CustomersPage() {
         <PageHeader
           title={`Welcome back, ${ownCustomer.name || 'Valued Customer'}!`}
           description="View your active business account details, total settlements, and balance statements."
+          actions={
+            <Button
+              variant="secondary"
+              icon={Printer}
+              onClick={() => {
+                setPrintStatementCustomer(ownCustomer);
+                setIsPrintStatementModalOpen(true);
+              }}
+            >
+              Print Statement
+            </Button>
+          }
         />
 
         {/* Account Cards (Independent Outstanding and Savings Systems) */}
@@ -195,6 +212,18 @@ export default function CustomersPage() {
             </div>
           </div>
         </Card>
+
+        {/* Print Statement Modal */}
+        <PrintStatementModal
+          isOpen={isPrintStatementModalOpen}
+          onClose={() => {
+            setIsPrintStatementModalOpen(false);
+            setPrintStatementCustomer(null);
+          }}
+          customer={printStatementCustomer || ownCustomer}
+          customers={[ownCustomer]}
+          initialStatementType="lending"
+        />
       </div>
     );
   }
@@ -321,6 +350,17 @@ export default function CustomersPage() {
 
           <button
             onClick={() => {
+              setPrintStatementCustomer(row);
+              setIsPrintStatementModalOpen(true);
+            }}
+            className="p-1 rounded text-slate-500 hover:text-brand-primary hover:bg-slate-100"
+            title="Print Statement"
+          >
+            <Printer className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => {
               setSelectedCustomer(row);
               setIsDetailModalOpen(true);
             }}
@@ -356,6 +396,17 @@ export default function CustomersPage() {
         actions={
           canManageCustomers && (
             <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                icon={Printer}
+                onClick={() => {
+                  setPrintStatementCustomer(null);
+                  setIsPrintStatementModalOpen(true);
+                }}
+                className="border-slate-200 text-slate-700 hover:bg-slate-50"
+              >
+                Print Statement
+              </Button>
               <Button
                 variant="secondary"
                 icon={Receipt}
@@ -482,6 +533,18 @@ export default function CustomersPage() {
         onClose={() => setEnableLoginTarget(null)}
         customer={enableLoginTarget}
         onSuccess={fetchCustomers}
+      />
+
+      {/* Print Statement Modal */}
+      <PrintStatementModal
+        isOpen={isPrintStatementModalOpen}
+        onClose={() => {
+          setIsPrintStatementModalOpen(false);
+          setPrintStatementCustomer(null);
+        }}
+        customer={printStatementCustomer}
+        customers={customers}
+        initialStatementType="lending"
       />
     </div>
   );
