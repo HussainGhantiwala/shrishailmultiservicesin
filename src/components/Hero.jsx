@@ -108,7 +108,7 @@ export default function Hero() {
               <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span>प्रो. प्रा. मान्तेश्वर सुंटनूरे</span>
               <span className="text-slate-300">•</span>
-              <span className="text-slate-500 font-sans">Kasagi, Maharashtra</span>
+              <span className="text-slate-500 font-sans">Kasgi, Maharashtra</span>
             </div>
           </motion.div>
 
@@ -291,7 +291,7 @@ export default function Hero() {
                 Dedicated Customer Support
               </span>
               <span className="font-semibold text-slate-700 font-mono">
-                Kasagi • MH
+                Kasgi • MH
               </span>
             </div>
           </div>

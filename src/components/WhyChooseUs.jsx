@@ -86,7 +86,7 @@ export default function WhyChooseUs() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-slate-600 text-sm md:text-base leading-relaxed"
           >
-            Here is why residents, farmers, and entrepreneurs across Kasagi and surrounding areas choose Shrishail Multi Services.
+            Here is why residents, farmers, and entrepreneurs across Kasgi and surrounding areas choose Shrishail Multi Services.
           </motion.p>
         </div>
 

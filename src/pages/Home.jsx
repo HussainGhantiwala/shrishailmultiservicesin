@@ -15,7 +15,7 @@ export default function Home() {
     <>
       {/* Head SEO Configuration */}
       <Helmet>
-        <title>Shrishail Multi Services | Government Citizen Services & Business Khata Portal, Kasagi</title>
+        <title>Shrishail Multi Services | Government Citizen Services & Business Khata Portal, Kasgi</title>
         <meta 
           name="description" 
           content="Shrishail Multi Services (श्रीशैल मल्टिसर्विसेस, कसगी) - Authorized citizen e-services, AEPS banking, PM-Kisan & agriculture schemes, business khata book and ledger. Managed by Prof. Manteshwar Suntnure." 
@@ -27,7 +27,7 @@ export default function Home() {
         <meta property="og:title" content="Shrishail Multi Services | Citizen Services & Business Khata Portal" />
         <meta 
           property="og:description" 
-          content="Authorized citizen e-services, digital AEPS banking, farmer subsidy schemes, and business khata book portal in Kasagi, Solapur." 
+          content="Authorized citizen e-services, digital AEPS banking, farmer subsidy schemes, and business khata book portal in Kasgi, Dharashiv." 
         />
         <meta property="og:image" content="https://shrishailmultiservices.in/og-image.jpg" />
 
@@ -37,7 +37,7 @@ export default function Home() {
         <meta property="twitter:title" content="Shrishail Multi Services" />
         <meta 
           property="twitter:description" 
-          content="Authorized citizen e-services, digital AEPS banking, farmer subsidy schemes, and business khata book portal in Kasagi." 
+          content="Authorized citizen e-services, digital AEPS banking, farmer subsidy schemes, and business khata book portal in Kasgi." 
         />
         
         {/* Robots metadata */}

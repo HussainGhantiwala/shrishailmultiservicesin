@@ -43,7 +43,7 @@ export default function CTA() {
             
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-white font-medium text-xs mb-5">
               <MapPin className="w-3.5 h-3.5 text-blue-300" />
-              <span>कसगी, ता. अक्कलकोट • Kasagi Center</span>
+              <span>कसगी, ता. उमरगा • Kasgi Center</span>
             </div>
 
             <h3 className="font-noto-devanagari text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3">

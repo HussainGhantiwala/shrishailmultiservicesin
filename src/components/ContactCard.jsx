@@ -44,7 +44,7 @@ export default function ContactCard() {
             Connect with Shrishail Multi Services
           </h3>
           <p className="text-brand-muted text-base md:text-lg leading-relaxed">
-            Have questions about citizen services, banking transactions, or our business khata portal? Reach out to us directly or visit our center in Kasagi.
+            Have questions about citizen services, banking transactions, or our business khata portal? Reach out to us directly or visit our center in Kasgi.
           </p>
         </div>
 
@@ -83,26 +83,23 @@ export default function ContactCard() {
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 font-medium">Phone & WhatsApp</div>
-                    <div className="flex flex-col gap-0.5 mt-0.5">
-                      <a href="tel:+917416398023" className="text-sm font-semibold hover:text-blue-300 transition-colors">
-                        +91 74163 98023
-                      </a>
-                      <a href="tel:+919823011223" className="text-sm font-semibold hover:text-blue-300 transition-colors">
-                        +91 98230 11223
+                    <div className="mt-0.5">
+                      <a href="tel:+919850667573" className="text-sm font-semibold hover:text-blue-300 transition-colors">
+                        +91 98506 67573
                       </a>
                     </div>
                   </div>
                 </div>
 
                 {/* Email */}
-                <a href="mailto:info@shrishailmultiservices.in" className="flex items-start gap-4 group">
+                <a href="mailto:Smsuntnure123@gmail.com" className="flex items-start gap-4 group">
                   <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-blue-300 group-hover:bg-brand-primary group-hover:text-white transition-colors shrink-0 mt-0.5">
                     <Mail className="w-4 h-4" />
                   </div>
                   <div className="min-w-0">
                     <div className="text-xs text-slate-400 font-medium">Email Address</div>
                     <div className="text-sm font-semibold group-hover:text-blue-300 transition-colors truncate mt-0.5">
-                      info@shrishailmultiservices.in
+                      Smsuntnure123@gmail.com
                     </div>
                   </div>
                 </a>
@@ -114,8 +111,9 @@ export default function ContactCard() {
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 font-medium">Center Location</div>
-                    <div className="text-sm font-semibold text-white mt-0.5">Kasagi, Akkalkot</div>
-                    <div className="text-xs text-slate-300">Dist. Solapur, Maharashtra, India</div>
+                    <div className="text-sm font-semibold text-white mt-0.5 leading-snug">At Post Kasgi</div>
+                    <div className="text-xs text-slate-300 leading-relaxed">Taluka Omerga</div>
+                    <div className="text-xs text-slate-300 leading-relaxed">Dist. Dharashiv, Maharashtra, India</div>
                   </div>
                 </div>
 

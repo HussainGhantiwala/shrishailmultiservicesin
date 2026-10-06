@@ -59,7 +59,7 @@ export default function Footer() {
             </p>
 
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-sm">
-              Your trusted local multi-service center in Kasagi. Providing comprehensive citizen documentation, digital banking, farmer scheme assistance, and specialized business khata accounting solutions.
+              Your trusted local multi-service center in Kasgi. Providing comprehensive citizen documentation, digital banking, farmer scheme assistance, and specialized business khata accounting solutions.
             </p>
 
             <div className="pt-2 flex items-center gap-2 text-xs text-slate-400">
@@ -146,21 +146,23 @@ export default function Footer() {
             <div className="space-y-3 text-xs text-slate-400 mb-6">
               <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                <span>Kasagi, Akkalkot, Dist. Solapur, Maharashtra, India</span>
+                <div className="leading-relaxed">
+                  <div>At Post Kasgi, Taluka Omerga</div>
+                  <div>Dist. Dharashiv, Maharashtra, India</div>
+                </div>
               </div>
 
               <div className="flex items-start gap-2.5">
                 <Phone className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                <div className="flex flex-col">
-                  <a href="tel:+917416398023" className="hover:text-white transition-colors">+91 74163 98023</a>
-                  <a href="tel:+919823011223" className="hover:text-white transition-colors">+91 98230 11223</a>
+                <div>
+                  <a href="tel:+919850667573" className="hover:text-white transition-colors">+91 98506 67573</a>
                 </div>
               </div>
 
               <div className="flex items-start gap-2.5">
                 <Mail className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
-                <a href="mailto:info@shrishailmultiservices.in" className="hover:text-white transition-colors break-all">
-                  info@shrishailmultiservices.in
+                <a href="mailto:Smsuntnure123@gmail.com" className="hover:text-white transition-colors break-all">
+                  Smsuntnure123@gmail.com
                 </a>
               </div>
             </div>

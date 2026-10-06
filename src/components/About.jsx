@@ -76,7 +76,7 @@ export default function About() {
             </h3>
             
             <p className="text-slate-600 text-sm md:text-base leading-relaxed mb-4">
-              Headquartered in <strong>Kasagi, Maharashtra</strong>, under the leadership of <strong>Prof. Manteshwar Suntnure (प्रो. प्रा. मान्तेश्वर सुंटनूरे)</strong>, <strong>Shrishail Multi Services</strong> was established with a singular mission: to bring professional, transparent, and hassle-free services directly to individuals, farmers, and local businesses.
+              Headquartered in <strong>Kasgi, Maharashtra</strong>, under the leadership of <strong>Prof. Manteshwar Suntnure (प्रो. प्रा. मान्तेश्वर सुंटनूरे)</strong>, <strong>Shrishail Multi Services</strong> was established with a singular mission: to bring professional, transparent, and hassle-free services directly to individuals, farmers, and local businesses.
             </p>
             
             <p className="text-slate-600 text-sm md:text-base leading-relaxed mb-6">
