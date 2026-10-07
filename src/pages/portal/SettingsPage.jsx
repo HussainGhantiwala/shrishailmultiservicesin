@@ -54,7 +54,7 @@ export default function SettingsPage() {
               <label className="block font-semibold text-slate-700 mb-1">Business Phone Number</label>
               <input
                 type="text"
-                defaultValue="+91 98765 43210"
+                defaultValue="+91 98506 67573"
                 className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-mono"
               />
             </div>
@@ -62,7 +62,7 @@ export default function SettingsPage() {
               <label className="block font-semibold text-slate-700 mb-1">Registered Address</label>
               <input
                 type="text"
-                defaultValue="Plot 42, Main Road, Solapur, Maharashtra"
+                defaultValue="At. Post. Kasgi Taluka Omerga Dist. Dharashiv"
                 className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg"
               />
             </div>

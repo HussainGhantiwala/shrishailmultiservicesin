@@ -99,7 +99,10 @@ export const printReport = (title, metadata = {}, columns = [], data = []) => {
       <body>
         <div class="header">
           <h1 class="title">Shrishail Multi Services</h1>
-          <div class="subtitle">${title} • Generated on ${formatDateTime(new Date())}</div>
+          <div style="font-size: 11px; color: #475569; margin-top: 3px; font-weight: 500;">
+            At. Post. Kasgi Taluka Omerga Dist. Dharashiv • Contact: +91 98506 67573 • Smsuntnure123@gmail.com
+          </div>
+          <div class="subtitle" style="margin-top: 5px;">${title} • Generated on ${formatDateTime(new Date())}</div>
         </div>
         <div class="meta-box">
           ${metadataHtml}

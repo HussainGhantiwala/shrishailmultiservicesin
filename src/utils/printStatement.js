@@ -429,8 +429,7 @@ export const generateIndividualStatementHTML = ({
         <td style="vertical-align: top; width: 65%;">
           <h1 class="brand-title">Shrishail Multi Services</h1>
           <div class="brand-address">
-            Kasagi, Akkalkot<br>
-            Dist. Solapur, Maharashtra, India<br>
+            At. Post. Kasgi Taluka Omerga Dist. Dharashiv<br>
             Contact: +91 98506 67573 &bull; Smsuntnure123@gmail.com
           </div>
         </td>
@@ -1276,8 +1275,7 @@ export const generateConsolidatedStatementHTML = ({
         <td style="vertical-align: top; width: 62%;">
           <h1 class="brand-title">Shrishail Multi Services</h1>
           <div class="brand-address">
-            Kasgi, Akkalkot<br>
-            Dist. Solapur, Maharashtra, India<br>
+            At. Post. Kasgi Taluka Omerga Dist. Dharashiv<br>
             Contact: +91 98506 67573 &bull; Smsuntnure123@gmail.com
           </div>
         </td>

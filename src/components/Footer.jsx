@@ -147,8 +147,7 @@ export default function Footer() {
               <div className="flex items-start gap-2.5">
                 <MapPin className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                 <div className="leading-relaxed">
-                  <div>At Post Kasgi, Taluka Omerga</div>
-                  <div>Dist. Dharashiv, Maharashtra, India</div>
+                  At. Post. Kasgi Taluka Omerga Dist. Dharashiv
                 </div>
               </div>
 

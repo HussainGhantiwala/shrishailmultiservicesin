@@ -268,7 +268,7 @@ export default function CustomersPage() {
             </div>
             <div>
               <span className="text-slate-500 font-medium">Address:</span>
-              <div className="font-medium text-slate-800 mt-0.5">{ownCustomer.address || 'Solapur Road, MIDC'}</div>
+              <div className="font-medium text-slate-800 mt-0.5">{ownCustomer.address || 'Not specified'}</div>
             </div>
           </div>
         </Card>

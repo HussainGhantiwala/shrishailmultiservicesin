@@ -45,6 +45,26 @@ export default function SettingsPage() {
             </div>
 
             <div>
+              <label className="block font-semibold text-slate-700 mb-1">Registered Business Address</label>
+              <input
+                type="text"
+                readOnly
+                defaultValue="At. Post. Kasgi Taluka Omerga Dist. Dharashiv"
+                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-medium text-slate-800"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Business Contact</label>
+              <input
+                type="text"
+                readOnly
+                defaultValue="+91 98506 67573 • Smsuntnure123@gmail.com"
+                className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-medium text-slate-800"
+              />
+            </div>
+
+            <div>
               <label className="block font-semibold text-slate-700 mb-1">Primary Operating Currency</label>
               <input
                 type="text"

@@ -23,6 +23,6 @@
 INSERT INTO public.settings (key, value)
 VALUES (
     'company_info',
-    '{"name": "Shrishail Multi Services", "phone": "+91 98765 43210", "gst": "27AAAAA0000A1Z5", "address": "Plot 42, Main Road, Solapur, Maharashtra"}'::jsonb
+    '{"name": "Shrishail Multi Services", "phone": "+91 98506 67573", "email": "Smsuntnure123@gmail.com", "gst": "27AAAAA0000A1Z5", "address": "At. Post. Kasgi Taluka Omerga Dist. Dharashiv"}'::jsonb
 )
 ON CONFLICT (key) DO NOTHING;

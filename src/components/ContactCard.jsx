@@ -111,9 +111,9 @@ export default function ContactCard() {
                   </div>
                   <div>
                     <div className="text-xs text-slate-400 font-medium">Center Location</div>
-                    <div className="text-sm font-semibold text-white mt-0.5 leading-snug">At Post Kasgi</div>
-                    <div className="text-xs text-slate-300 leading-relaxed">Taluka Omerga</div>
-                    <div className="text-xs text-slate-300 leading-relaxed">Dist. Dharashiv, Maharashtra, India</div>
+                    <div className="text-sm font-semibold text-white mt-0.5 leading-snug">
+                      At. Post. Kasgi Taluka Omerga Dist. Dharashiv
+                    </div>
                   </div>
                 </div>
 

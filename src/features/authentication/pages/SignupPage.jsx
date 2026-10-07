@@ -256,7 +256,7 @@ export default function SignupPage() {
                       type="text"
                       value={formData.address}
                       onChange={(e) => handleChange('address', e.target.value)}
-                      placeholder="Solapur Road, MIDC"
+                      placeholder="e.g. Kasgi, Omerga"
                       className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:border-brand-primary focus:outline-none"
                     />
                   </div>
