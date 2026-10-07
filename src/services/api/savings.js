@@ -794,10 +794,12 @@ export const savingsApi = {
   /**
    * Get Savings Analytics data (Trend, Top Savers, Recent Withdrawals)
    */
-  async getSavingsAnalytics(months = 6) {
+  async getSavingsAnalytics(months = 6, customerId = null, customerTypeId = null) {
     try {
       const { data, error } = await supabase.rpc('get_savings_analytics', {
         p_months: months,
+        p_customer_id: customerId && customerId !== 'all' ? customerId : null,
+        p_customer_type_id: customerTypeId && customerTypeId !== 'all' ? customerTypeId : null,
       });
 
       if (!error && data) {
@@ -809,12 +811,22 @@ export const savingsApi = {
 
     // Client-side fallback aggregation
     const [accRes, txRes] = await Promise.all([
-      supabase.from('customer_savings_accounts').select('*, customer:customers(id, name, phone)').eq('status', 'active'),
-      supabase.from('customer_savings_transactions').select('*, customer:customers(name, phone)').eq('is_deleted', false).order('created_at', { ascending: false }).limit(200),
+      supabase.from('customer_savings_accounts').select('*, customer:customers(id, name, phone, customer_type_id)').eq('status', 'active'),
+      supabase.from('customer_savings_transactions').select('*, customer:customers(name, phone, customer_type_id)').eq('is_deleted', false).order('created_at', { ascending: false }).limit(200),
     ]);
 
-    const accounts = accRes.data || [];
-    const transactions = txRes.data || [];
+    let accounts = accRes.data || [];
+    let transactions = txRes.data || [];
+
+    if (customerId && customerId !== 'all') {
+      accounts = accounts.filter((a) => a.customer_id === customerId);
+      transactions = transactions.filter((t) => t.customer_id === customerId);
+    }
+
+    if (customerTypeId && customerTypeId !== 'all') {
+      accounts = accounts.filter((a) => a.customer?.customer_type_id === customerTypeId);
+      transactions = transactions.filter((t) => t.customer?.customer_type_id === customerTypeId);
+    }
 
     const totalSavings = accounts.reduce((acc, curr) => acc + (Number(curr.savings_balance) || 0), 0);
     const activeSavers = accounts.filter((a) => Number(a.savings_balance) > 0).length;
