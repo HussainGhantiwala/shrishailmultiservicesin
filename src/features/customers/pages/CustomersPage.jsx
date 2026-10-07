@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { customerApi } from '../../../services/api/customers';
-import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound, PiggyBank, Wallet, Receipt, Printer, Tag } from 'lucide-react';
+import { Plus, Eye, Edit3, Trash2, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound, PiggyBank, Wallet, Receipt, Printer, Tag } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
 import SearchBar from '../../../components/common/SearchBar';
@@ -12,6 +12,7 @@ import Card from '../../../components/common/Card';
 import StatCard from '../../../components/common/StatCard';
 import CustomerFormModal from '../components/CustomerFormModal';
 import CustomerDetailModal from '../components/CustomerDetailModal';
+import CustomerDeleteModal from '../components/CustomerDeleteModal';
 import EnableLoginModal from '../components/EnableLoginModal';
 import CustomerTypeModal from '../../../components/portal/CustomerTypeModal';
 import PayCustomerBillModal from '../../../components/portal/PayCustomerBillModal';
@@ -41,6 +42,11 @@ export default function CustomersPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [enableLoginTarget, setEnableLoginTarget] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Permanent Delete Modal state
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
+  const [isDeletingCustomer, setIsDeletingCustomer] = useState(false);
 
   // Print Statement state
   const [isPrintStatementModalOpen, setIsPrintStatementModalOpen] = useState(false);
@@ -101,9 +107,35 @@ export default function CustomersPage() {
         await customerApi.createCustomer(formData, user);
         toast.success('Customer registered & initial ledger account created.');
       }
-      fetchCustomers();
+      await fetchCustomers();
+      setIsFormModalOpen(false);
+      setCustomerToEdit(null);
+    } catch (err) {
+      console.error('Customer form submit failed:', err);
+      toast.error(err.message || 'Failed to save customer');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handlePermanentDelete = async (customerId) => {
+    if (!customerId) return;
+    setIsDeletingCustomer(true);
+    try {
+      await customerApi.deleteCustomerPermanently(customerId);
+      toast.success('Customer permanently deleted successfully.');
+      setIsDeleteModalOpen(false);
+      setCustomerToDelete(null);
+      if (selectedCustomer?.id === customerId) {
+        setIsDetailModalOpen(false);
+        setSelectedCustomer(null);
+      }
+      await fetchCustomers();
+    } catch (err) {
+      console.error('Permanent customer delete failed:', err);
+      toast.error(err.message || 'Unable to permanently delete this customer.');
+    } finally {
+      setIsDeletingCustomer(false);
     }
   };
 
@@ -420,6 +452,19 @@ export default function CustomersPage() {
               <Edit3 className="w-4 h-4" />
             </button>
           )}
+
+          {isAdmin && (
+            <button
+              onClick={() => {
+                setCustomerToDelete(row);
+                setIsDeleteModalOpen(true);
+              }}
+              className="p-1 rounded text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
+              title="Permanently Delete Customer"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       ),
     },
@@ -623,6 +668,20 @@ export default function CustomersPage() {
           fetchCustomers();
         }}
         currentUser={user}
+      />
+
+      {/* Permanent Delete Modal */}
+      <CustomerDeleteModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => {
+          if (!isDeletingCustomer) {
+            setIsDeleteModalOpen(false);
+            setCustomerToDelete(null);
+          }
+        }}
+        customer={customerToDelete}
+        onConfirmDelete={handlePermanentDelete}
+        isDeleting={isDeletingCustomer}
       />
     </div>
   );

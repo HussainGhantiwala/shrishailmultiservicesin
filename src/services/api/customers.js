@@ -502,4 +502,35 @@ export const customerApi = {
       error: null,
     };
   },
+
+  /**
+   * Permanently hard-delete customer and all associated records atomically via RPC
+   * (Admin only operation)
+   */
+  async deleteCustomerPermanently(id) {
+    if (!id) throw new Error('Customer ID is required');
+
+    const { data, error } = await supabase.rpc('delete_customer_permanently', {
+      p_customer_id: id,
+    });
+
+    if (error) {
+      console.error('delete_customer_permanently RPC error:', error);
+      throw new Error(error.message);
+    }
+
+    // Clean up local cache if present
+    try {
+      const raw = localStorage.getItem('sms_customer_type_associations');
+      if (raw) {
+        const map = JSON.parse(raw);
+        if (map[id]) {
+          delete map[id];
+          localStorage.setItem('sms_customer_type_associations', JSON.stringify(map));
+        }
+      }
+    } catch (e) {}
+
+    return { data, error: null };
+  },
 };

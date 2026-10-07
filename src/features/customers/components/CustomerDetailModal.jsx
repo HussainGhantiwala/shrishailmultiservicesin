@@ -93,20 +93,36 @@ export default function CustomerDetailModal({
         isOpen={isOpen}
         onClose={onClose}
         title="Customer Account Profile & Summary"
+        className="max-w-2xl max-h-[90vh]"
         footer={
-          <div className="flex items-center justify-between w-full">
+          <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-2">
             <div className="text-[11px] text-slate-400">
               Account No: <strong className="font-mono text-slate-700">{account.account_number || 'ACC-1001'}</strong>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {onPayBill && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={Receipt}
+                  onClick={() => {
+                    onClose();
+                    onPayBill(customer);
+                  }}
+                  className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 font-bold"
+                >
+                  Pay Customer Bill
+                </Button>
+              )}
               <Button
                 variant="secondary"
+                size="sm"
                 icon={Printer}
                 onClick={() => setIsPrintModalOpen(true)}
               >
                 Print Statement
               </Button>
-              <Button variant="secondary" onClick={onClose}>
+              <Button variant="secondary" size="sm" onClick={onClose}>
                 Close
               </Button>
             </div>
