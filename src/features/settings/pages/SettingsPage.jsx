@@ -1,6 +1,7 @@
 import React from 'react';
 import PageHeader from '../../../components/common/PageHeader';
 import Card from '../../../components/common/Card';
+import CustomerTypeManagementCard from '../../../components/portal/CustomerTypeManagementCard';
 import { Building, ShieldCheck, Receipt } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -8,8 +9,11 @@ export default function SettingsPage() {
     <div className="space-y-6 font-sans text-xs">
       <PageHeader
         title="Business & Application Settings"
-        description="Configure company details, receipt branding, and staff access preferences."
+        description="Configure company details, receipt branding, customer classification types, and administrative preferences."
       />
+
+      {/* Customer Types Master Section */}
+      <CustomerTypeManagementCard />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Company Details Card */}

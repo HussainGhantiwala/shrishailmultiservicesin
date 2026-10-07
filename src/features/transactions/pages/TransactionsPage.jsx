@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { transactionsApi } from '../../../services/api/transactions';
@@ -54,7 +54,11 @@ export default function TransactionsPage() {
   };
   const [formData, setFormData] = useState(initialFormData);
 
+  const isFetchingTxRef = useRef(false);
+
   const fetchTransactions = useCallback(async () => {
+    if (isFetchingTxRef.current) return;
+    isFetchingTxRef.current = true;
     setLoading(true);
     setError(null);
     try {
@@ -67,9 +71,10 @@ export default function TransactionsPage() {
       toast.error('Failed to fetch transactions');
       console.error(err);
     } finally {
+      isFetchingTxRef.current = false;
       setLoading(false);
     }
-  }, [search, entryType, showDeleted, page, pageSize, toast]);
+  }, [search, entryType, showDeleted, page, pageSize]);
 
   const fetchCustomers = async () => {
     try {
@@ -88,16 +93,19 @@ export default function TransactionsPage() {
     fetchCustomers();
   }, []);
 
+  const fetchTxRef = useRef(fetchTransactions);
+  fetchTxRef.current = fetchTransactions;
+
   useEffect(() => {
     const channel = transactionsApi.subscribeToChanges(() => {
-      fetchTransactions();
+      fetchTxRef.current();
     });
     return () => {
       if (channel) {
         supabase.removeChannel(channel);
       }
     };
-  }, [fetchTransactions]);
+  }, []);
 
   const handleSearch = (val) => {
     setSearch(val);

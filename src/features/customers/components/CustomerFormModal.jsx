@@ -4,16 +4,21 @@ import Button from '../../../components/common/Button';
 import { isValidEmail, isValidPhone, isValidGST } from '../../../utils/validation';
 import { parseCurrency } from '../../../utils/currency';
 import { useToast } from '../../../context/ToastContext';
-import { User, Phone, Mail, MapPin, FileText, Lock, Shield } from 'lucide-react';
+import { customerTypesApi } from '../../../services/api/customerTypes';
+import { User, Phone, Mail, MapPin, FileText, Lock, Shield, Tag } from 'lucide-react';
 
 export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerToEdit = null, isLoading = false }) {
   const toast = useToast();
+  const [customerTypes, setCustomerTypes] = useState([]);
+  const [loadingTypes, setLoadingTypes] = useState(false);
+
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     email: '',
     address: '',
     gst_number: '',
+    customer_type_id: '',
     notes: '',
     opening_balance: '',
     opening_savings: '',
@@ -23,6 +28,39 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
 
   const [errors, setErrors] = useState({});
 
+  // Fetch active customer types whenever modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setLoadingTypes(true);
+      customerTypesApi
+        .getCustomerTypes({ activeOnly: true })
+        .then(async (res) => {
+          let list = res.data || [];
+
+          // If editing an existing customer with an inactive type, ensure their type is still present in dropdown
+          if (customerToEdit?.customer_type_id) {
+            const hasType = list.some((t) => t.id === customerToEdit.customer_type_id);
+            if (!hasType) {
+              const { data: existingType } = await customerTypesApi.getCustomerTypeById(
+                customerToEdit.customer_type_id
+              );
+              if (existingType) {
+                list = [...list, existingType];
+              }
+            }
+          }
+
+          setCustomerTypes(list);
+        })
+        .catch((err) => {
+          console.warn('Failed to load customer types for form:', err);
+        })
+        .finally(() => {
+          setLoadingTypes(false);
+        });
+    }
+  }, [isOpen, customerToEdit]);
+
   useEffect(() => {
     if (customerToEdit) {
       setFormData({
@@ -31,6 +69,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
         email: customerToEdit.email || '',
         address: customerToEdit.address || '',
         gst_number: customerToEdit.gst_number || '',
+        customer_type_id: customerToEdit.customer_type_id || customerToEdit.customer_type?.id || '',
         notes: customerToEdit.notes || '',
         opening_balance: customerToEdit.opening_balance || '',
         opening_savings: '',
@@ -44,6 +83,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
         email: '',
         address: '',
         gst_number: '',
+        customer_type_id: '',
         notes: '',
         opening_balance: '',
         opening_savings: '',
@@ -80,6 +120,10 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
       errs.gst_number = 'Enter a valid 15-character GSTIN number';
     }
 
+    if (!formData.customer_type_id) {
+      errs.customer_type_id = 'Customer type is required';
+    }
+
     if (formData.opening_balance && String(formData.opening_balance).trim()) {
       const valStr = String(formData.opening_balance).trim();
       if (/[^0-9.,\s₹$]/.test(valStr)) {
@@ -108,15 +152,10 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    if (!validate()) return;
-
-    try {
-      await onSubmit(formData);
-      onClose();
-    } catch (err) {
-      toast.error(err.message || 'Failed to save customer');
+    if (validate()) {
+      onSubmit(formData);
     }
   };
 
@@ -124,20 +163,20 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={customerToEdit ? 'Edit Customer Profile' : 'Register New Customer'}
+      title={customerToEdit ? 'Edit Customer Profile' : 'Register New Customer & Initial Ledger'}
       footer={
-        <>
-          <Button variant="secondary" onClick={onClose} isDisabled={isLoading}>
+        <div className="flex items-center justify-end gap-2 w-full">
+          <Button variant="secondary" onClick={onClose} disabled={isLoading}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} isLoading={isLoading}>
-            {customerToEdit ? 'Save Changes' : 'Create Customer'}
+            {customerToEdit ? 'Save Changes' : 'Create Customer Account'}
           </Button>
-        </>
+        </div>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-        {/* Customer Name */}
+      <form onSubmit={handleSubmit} className="space-y-4 font-sans text-xs">
+        {/* Name */}
         <div>
           <label className="block font-semibold text-slate-700 mb-1">
             Customer Name <span className="text-rose-500">*</span>
@@ -206,7 +245,7 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
                 type="text"
                 value={formData.address}
                 onChange={(e) => handleChange('address', e.target.value)}
-                placeholder="Solapur Road, MIDC"
+                placeholder="Kasgi, Omerga"
                 className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:border-brand-primary focus:outline-none"
               />
             </div>
@@ -228,6 +267,37 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
             </div>
             {errors.gst_number && <p className="text-[11px] text-rose-600 mt-0.5">{errors.gst_number}</p>}
           </div>
+        </div>
+
+        {/* Customer Type Dropdown */}
+        <div>
+          <label className="block font-semibold text-slate-700 mb-1">
+            Customer Type <span className="text-rose-500">*</span>
+          </label>
+          <div className="relative">
+            <Tag className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <select
+              value={formData.customer_type_id}
+              onChange={(e) => handleChange('customer_type_id', e.target.value)}
+              disabled={loadingTypes}
+              className={`w-full pl-9 pr-3 py-2 bg-slate-50 border rounded-lg focus:bg-white focus:outline-none text-xs font-semibold ${
+                errors.customer_type_id ? 'border-rose-500' : 'border-slate-300 focus:border-brand-primary'
+              }`}
+            >
+              <option value="">-- Select Customer Type --</option>
+              {customerTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name} {!type.is_active ? '(Inactive)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          {errors.customer_type_id && (
+            <p className="text-[11px] text-rose-600 mt-0.5">{errors.customer_type_id}</p>
+          )}
+          <p className="text-[10px] text-slate-400 mt-0.5">
+            Backend classification master. Categorizes customer for ledger filtering and reporting.
+          </p>
         </div>
 
         {/* Status & Login Enabled Switcher */}
@@ -258,81 +328,77 @@ export default function CustomerFormModal({ isOpen, onClose, onSubmit, customerT
           </div>
         </div>
 
-        {/* Opening Balances (Two Completely Independent Financial Accounts) */}
+        {/* Initial Opening Balances (Registration Only - Independent Systems) */}
         {!customerToEdit && (
-          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-200/60 pb-1.5">
-              <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">
-                Initial Account Balances (Optional)
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">Independent Ledgers</span>
+          <div className="space-y-3 pt-2 border-t border-slate-200">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-800 text-xs">Initial Opening Balances</span>
+              <span className="text-[10px] text-slate-400">Independent Balances</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Opening Due Balance */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
+              {/* 1. Opening Due Balance (Lending Account) */}
+              <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl space-y-1">
+                <label className="block font-semibold text-amber-900 text-[11px]">
                   Opening Due Balance (₹)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold">₹</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₹</span>
                   <input
                     type="text"
-                    inputMode="decimal"
                     value={formData.opening_balance}
                     onChange={(e) => handleChange('opening_balance', e.target.value)}
-                    placeholder="0.00 (e.g. 50,000)"
-                    className={`w-full pl-8 pr-3 py-2 bg-white border rounded-lg focus:outline-none font-mono ${
-                      errors.opening_balance ? 'border-rose-500' : 'border-slate-300 focus:border-brand-primary'
+                    placeholder="0.00"
+                    className={`w-full pl-7 pr-3 py-1.5 bg-white border rounded-lg focus:outline-none font-mono text-xs font-semibold ${
+                      errors.opening_balance ? 'border-rose-500' : 'border-amber-300 focus:border-amber-500'
                     }`}
                   />
                 </div>
                 {errors.opening_balance && (
-                  <p className="text-[11px] text-rose-600 mt-0.5">{errors.opening_balance}</p>
+                  <p className="text-[10px] text-rose-600">{errors.opening_balance}</p>
                 )}
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Amount owed by customer (Lending Ledger).
+                <p className="text-[10px] text-amber-700 leading-tight">
+                  Pre-existing customer debt/dues before portal registration.
                 </p>
               </div>
 
-              {/* Opening Savings Balance */}
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
+              {/* 2. Opening Savings Balance (Savings Account) */}
+              <div className="p-3 bg-teal-50/60 border border-teal-200 rounded-xl space-y-1">
+                <label className="block font-semibold text-teal-900 text-[11px]">
                   Opening Savings Balance (₹)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600 font-bold">₹</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-xs">₹</span>
                   <input
                     type="text"
-                    inputMode="decimal"
                     value={formData.opening_savings}
                     onChange={(e) => handleChange('opening_savings', e.target.value)}
-                    placeholder="0.00 (e.g. 10,000)"
-                    className={`w-full pl-8 pr-3 py-2 bg-white border rounded-lg focus:outline-none font-mono ${
-                      errors.opening_savings ? 'border-rose-500' : 'border-slate-300 focus:border-emerald-600'
+                    placeholder="0.00"
+                    className={`w-full pl-7 pr-3 py-1.5 bg-white border rounded-lg focus:outline-none font-mono text-xs font-semibold ${
+                      errors.opening_savings ? 'border-rose-500' : 'border-teal-300 focus:border-teal-500'
                     }`}
                   />
                 </div>
                 {errors.opening_savings && (
-                  <p className="text-[11px] text-rose-600 mt-0.5">{errors.opening_savings}</p>
+                  <p className="text-[10px] text-rose-600">{errors.opening_savings}</p>
                 )}
-                <p className="text-[10px] text-slate-400 mt-0.5">
-                  Customer savings held by business (Savings Ledger).
+                <p className="text-[10px] text-teal-700 leading-tight">
+                  Initial customer deposit held safely in savings ledger.
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Notes */}
+        {/* Remarks */}
         <div>
           <label className="block font-semibold text-slate-700 mb-1">Notes / Internal Remarks</label>
           <textarea
-            rows="2"
+            rows={2}
             value={formData.notes}
             onChange={(e) => handleChange('notes', e.target.value)}
-            placeholder="Additional business terms or remarks..."
-            className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:border-brand-primary focus:outline-none"
+            placeholder="Special customer terms, referral, credit limit, or registration remarks..."
+            className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:border-brand-primary focus:outline-none"
           />
         </div>
       </form>

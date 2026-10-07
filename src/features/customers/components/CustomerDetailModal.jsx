@@ -28,6 +28,7 @@ import {
   Clock,
   Plus,
   Printer,
+  Tag,
 } from 'lucide-react';
 import PrintStatementModal from '../../../components/portal/PrintStatementModal';
 
@@ -307,6 +308,16 @@ export default function CustomerDetailModal({
 
               {/* Customer Information Grid */}
               <div className="bg-slate-50 p-4 border border-slate-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <span className="text-slate-500 font-medium">Customer Type:</span>
+                  <div className="mt-0.5">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+                      <Tag className="w-3 h-3 text-brand-primary" />
+                      {customer.customer_type?.name || 'Unassigned'}
+                    </span>
+                  </div>
+                </div>
+
                 <div>
                   <span className="text-slate-500 font-medium">Phone Number:</span>
                   <div className="font-mono font-semibold text-slate-900 mt-0.5">{customer.phone}</div>

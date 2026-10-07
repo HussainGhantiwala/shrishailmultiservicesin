@@ -721,7 +721,7 @@ export const savingsApi = {
   /**
    * Get Savings Report data
    */
-  async getSavingsReport(startDate = null, endDate = null, customerId = null) {
+  async getSavingsReport(startDate = null, endDate = null, customerId = null, customerTypeId = null) {
     const { data, error } = await supabase.rpc('get_savings_report', {
       p_start_date: startDate || null,
       p_end_date: endDate || null,
@@ -730,9 +730,58 @@ export const savingsApi = {
 
     if (error) throw new Error(error.message);
 
-    const reportData = data || {};
-    // Defensively ensure total_deposited strictly excludes OPENING savings
-    if (reportData.transactions && Array.isArray(reportData.transactions)) {
+    let reportData = data || {};
+
+    // If customerTypeId is specified, filter transactions and accounts by customer type
+    if (customerTypeId && customerTypeId !== 'all' && reportData.transactions) {
+      // Find matching customer IDs
+      try {
+        const { data: custs } = await supabase
+          .from('customers')
+          .select('id, customer_type_id')
+          .eq('customer_type_id', customerTypeId);
+
+        let matchingIds = new Set((custs || []).map((c) => c.id));
+        // Check local storage associations fallback
+        try {
+          const raw = localStorage.getItem('sms_customer_type_associations');
+          if (raw) {
+            const map = JSON.parse(raw);
+            Object.entries(map).forEach(([cid, tid]) => {
+              if (tid === customerTypeId) matchingIds.add(cid);
+            });
+          }
+        } catch (e) {}
+
+        const filteredTx = (reportData.transactions || []).filter((t) => matchingIds.has(t.customer_id));
+        const filteredTopSavers = (reportData.top_savers || []).filter((s) => matchingIds.has(s.id || s.customer_id));
+
+        const actualDeposits = filteredTx
+          .filter((t) => (t.transaction_type === 'DEPOSIT' || t.transaction_type === 'CREDIT') && !t.is_deleted)
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const actualWithdrawals = filteredTx
+          .filter((t) => ['WITHDRAWAL', 'DEBIT', 'BILL_PAYMENT'].includes(t.transaction_type) && !t.is_deleted)
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        const billsPaid = filteredTx
+          .filter((t) => t.transaction_type === 'BILL_PAYMENT' && !t.is_deleted)
+          .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        reportData = {
+          ...reportData,
+          total_deposited: actualDeposits,
+          total_withdrawn: actualWithdrawals,
+          savings_used_for_bills: billsPaid,
+          net_savings_change: actualDeposits - actualWithdrawals,
+          transactions: filteredTx,
+          top_savers: filteredTopSavers,
+        };
+      } catch (err) {
+        console.warn('Error filtering savings report by customer type:', err.message);
+      }
+    } else if (reportData.transactions && Array.isArray(reportData.transactions)) {
+      // Defensively ensure total_deposited strictly excludes OPENING savings
       const actualDeposits = reportData.transactions
         .filter((t) => (t.transaction_type === 'DEPOSIT' || t.transaction_type === 'CREDIT') && !t.is_deleted)
         .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);

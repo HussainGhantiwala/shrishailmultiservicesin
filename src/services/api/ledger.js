@@ -104,6 +104,7 @@ export const ledgerApi = {
     const {
       searchQuery = '',
       entryType = 'all',
+      customerTypeId = 'all',
       startDate = '',
       endDate = '',
       showDeleted = false,
@@ -113,12 +114,84 @@ export const ledgerApi = {
 
     const isAllCustomers = !customerId || customerId === 'all';
 
+    // 1. Resolve customerTypeId filtering if specified
+    let matchingCustomerIds = null;
+    let typedActiveCount = 0;
+    if (customerTypeId && customerTypeId !== 'all') {
+      try {
+        const { data: typedCustomers } = await supabase
+          .from('customers')
+          .select('id, status, customer_type_id')
+          .eq('customer_type_id', customerTypeId);
+
+        matchingCustomerIds = (typedCustomers || []).map((c) => c.id);
+        typedActiveCount = (typedCustomers || []).filter((c) => c.status === 'active').length;
+      } catch (e) {
+        matchingCustomerIds = [];
+      }
+
+      // Check local associations fallback if schema cache was pending
+      try {
+        const raw = localStorage.getItem('sms_customer_type_associations');
+        if (raw) {
+          const map = JSON.parse(raw);
+          Object.entries(map).forEach(([cid, tid]) => {
+            if (tid === customerTypeId && !matchingCustomerIds.includes(cid)) {
+              matchingCustomerIds.push(cid);
+            }
+          });
+        }
+      } catch (e) {}
+
+      // If no customers belong to this type, return empty results and 0 balances
+      if (matchingCustomerIds.length === 0) {
+        return {
+          data: [],
+          count: 0,
+          error: null,
+          balances: {
+            totalCredit: 0,
+            totalDebit: 0,
+            totalPaid: 0,
+            totalSavingsPaid: 0,
+            totalAdjustment: 0,
+            rawBalance: 0,
+            outstandingBalance: 0,
+            advanceBalance: 0,
+            netReceivable: 0,
+            activeCustomerCount: 0,
+          },
+        };
+      }
+
+      // If viewing a specific customer that is NOT of this type, return empty
+      if (!isAllCustomers && !matchingCustomerIds.includes(customerId)) {
+        return {
+          data: [],
+          count: 0,
+          error: null,
+          balances: {
+            totalCredit: 0,
+            totalDebit: 0,
+            totalPaid: 0,
+            totalSavingsPaid: 0,
+            totalAdjustment: 0,
+            rawBalance: 0,
+            outstandingBalance: 0,
+            advanceBalance: 0,
+            netReceivable: 0,
+            activeCustomerCount: 0,
+          },
+        };
+      }
+    }
+
     let query = supabase
       .from('ledger_entries')
       .select(`
         *,
         customer:customers(
-          id, name, phone, email, status,
+          id, name, phone, email, status, customer_type_id,
           account:customer_accounts(id, account_number, outstanding_balance, total_paid, total_credit, total_debit, status)
         )
       `, { count: 'exact' })
@@ -126,6 +199,8 @@ export const ledgerApi = {
 
     if (!isAllCustomers) {
       query = query.eq('customer_id', customerId);
+    } else if (matchingCustomerIds !== null) {
+      query = query.in('customer_id', matchingCustomerIds);
     }
 
     if (!showDeleted) {
@@ -210,10 +285,20 @@ export const ledgerApi = {
       // If viewing All Customers, compute aggregate stats across all accounts:
       // Customer A's credit MUST NEVER reduce Customer B's outstanding dues.
       try {
-        const { data: accountsData } = await supabase
+        let accQuery = supabase
           .from('customer_accounts')
-          .select('outstanding_balance, advance_balance, total_paid, total_credit, total_debit');
-        const { count: activeCount } = await supabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'active');
+          .select('outstanding_balance, advance_balance, total_paid, total_credit, total_debit, customer_id');
+
+        if (matchingCustomerIds !== null) {
+          accQuery = accQuery.in('customer_id', matchingCustomerIds);
+        }
+
+        const { data: accountsData } = await accQuery;
+        let activeCount = typedActiveCount;
+        if (matchingCustomerIds === null) {
+          const { count } = await supabase.from('customers').select('*', { count: 'exact', head: true }).eq('status', 'active');
+          activeCount = count;
+        }
 
         let globalOutstanding = 0;
         let globalAdvance = 0;

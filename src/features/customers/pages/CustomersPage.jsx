@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useToast } from '../../../context/ToastContext';
 import { customerApi } from '../../../services/api/customers';
-import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound, PiggyBank, Wallet, Receipt, Printer } from 'lucide-react';
+import { Plus, Eye, Edit3, Shield, Lock, CreditCard, UserCheck, ShieldAlert, KeyRound, PiggyBank, Wallet, Receipt, Printer, Tag } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
 import SearchBar from '../../../components/common/SearchBar';
@@ -13,9 +13,12 @@ import StatCard from '../../../components/common/StatCard';
 import CustomerFormModal from '../components/CustomerFormModal';
 import CustomerDetailModal from '../components/CustomerDetailModal';
 import EnableLoginModal from '../components/EnableLoginModal';
+import CustomerTypeModal from '../../../components/portal/CustomerTypeModal';
 import PayCustomerBillModal from '../../../components/portal/PayCustomerBillModal';
 import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
 import PrintStatementModal from '../../../components/portal/PrintStatementModal';
+import { customerTypesApi } from '../../../services/api/customerTypes';
+import { supabase } from '../../../lib/supabase';
 import { formatRupees } from '../../../utils/currency';
 import { formatDate } from '../../../utils/date';
 
@@ -27,6 +30,9 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [customerTypes, setCustomerTypes] = useState([]);
+  const [customerTypeFilter, setCustomerTypeFilter] = useState('all');
+  const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
 
   // Modals state
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -47,10 +53,19 @@ export default function CustomersPage() {
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isNewReceipt, setIsNewReceipt] = useState(false);
 
+  const fetchCustomerTypes = async () => {
+    try {
+      const res = await customerTypesApi.getCustomerTypes({ activeOnly: false });
+      setCustomerTypes(res.data || []);
+    } catch (e) {
+      console.warn('Failed to load customer types in directory:', e);
+    }
+  };
+
   const fetchCustomers = async () => {
     setLoading(true);
     try {
-      const res = await customerApi.getCustomers(search, statusFilter);
+      const res = await customerApi.getCustomers(search, statusFilter, customerTypeFilter);
       setCustomers(res.data || []);
     } catch (err) {
       toast.error(err.message || 'Failed to fetch customers');
@@ -61,7 +76,20 @@ export default function CustomersPage() {
 
   useEffect(() => {
     fetchCustomers();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, customerTypeFilter]);
+
+  useEffect(() => {
+    fetchCustomerTypes();
+
+    const channel = customerTypesApi.subscribeToChanges(() => {
+      fetchCustomerTypes();
+      fetchCustomers();
+    });
+
+    return () => {
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleCreateOrUpdate = async (formData) => {
     setSubmitting(true);
@@ -244,6 +272,16 @@ export default function CustomersPage() {
     },
     { header: 'Account No', accessorKey: 'account', render: (row) => <span className="font-mono font-semibold text-slate-700">{row.account?.account_number || 'ACC-1001'}</span> },
     { header: 'Phone Number', accessorKey: 'phone', className: 'font-mono' },
+    {
+      header: 'Customer Type',
+      accessorKey: 'customer_type',
+      render: (row) => (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+          <Tag className="w-3 h-3 text-brand-primary shrink-0" />
+          {row.customer_type?.name || 'Unassigned'}
+        </span>
+      ),
+    },
     { header: 'Reg Date', accessorKey: 'created_at', render: (row) => <span className="font-mono text-slate-600">{formatDate(row.created_at)}</span> },
     {
       header: 'Outstanding Dues',
@@ -418,6 +456,17 @@ export default function CustomersPage() {
               >
                 Pay Customer Bill
               </Button>
+              {isAdmin && (
+                <Button
+                  variant="secondary"
+                  icon={Tag}
+                  onClick={() => setIsTypeModalOpen(true)}
+                  className="border-blue-200 text-blue-700 hover:bg-blue-50 font-semibold"
+                  title="Add / Manage Customer Types"
+                >
+                  Customer Types
+                </Button>
+              )}
               <Button
                 icon={Plus}
                 onClick={() => {
@@ -433,21 +482,39 @@ export default function CustomersPage() {
       />
 
       {/* Filter & Search Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
-        <SearchBar value={search} onChange={setSearch} placeholder="Search by customer name, phone, GST..." />
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end text-xs text-slate-600">
-          <span className="font-semibold">Filter Status:</span>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none capitalize font-medium text-slate-700"
-          >
-            <option value="all">All Statuses</option>
-            <option value="pending_approval">Pending Approval Only</option>
-            <option value="active">Active Only</option>
-            <option value="inactive">Inactive Only</option>
-            <option value="blocked">Blocked Only</option>
-          </select>
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
+        <SearchBar value={search} onChange={setSearch} placeholder="Search by customer name, type (Farmer, etc.), phone, GST..." className="w-full md:max-w-md" />
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end text-xs text-slate-600">
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-slate-700 whitespace-nowrap">Customer Type:</span>
+            <select
+              value={customerTypeFilter}
+              onChange={(e) => setCustomerTypeFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none font-semibold text-slate-700"
+            >
+              <option value="all">All Customer Types</option>
+              {customerTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} {!t.is_active ? '(Inactive)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-slate-700 whitespace-nowrap">Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-xs focus:outline-none capitalize font-medium text-slate-700"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending_approval">Pending Approval Only</option>
+              <option value="active">Active Only</option>
+              <option value="inactive">Inactive Only</option>
+              <option value="blocked">Blocked Only</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -545,6 +612,17 @@ export default function CustomersPage() {
         customer={printStatementCustomer}
         customers={customers}
         initialStatementType="lending"
+      />
+
+      {/* Admin Customer Type Modal */}
+      <CustomerTypeModal
+        isOpen={isTypeModalOpen}
+        onClose={() => setIsTypeModalOpen(false)}
+        onSuccess={() => {
+          fetchCustomerTypes();
+          fetchCustomers();
+        }}
+        currentUser={user}
       />
     </div>
   );

@@ -16,7 +16,9 @@ import {
   CheckCircle2,
   Wallet,
   Users,
+  Tag,
 } from 'lucide-react';
+import { customerTypesApi } from '../../services/api/customerTypes';
 
 export default function PrintStatementModal({
   isOpen,
@@ -24,11 +26,14 @@ export default function PrintStatementModal({
   customer = null,
   customers = [],
   initialStatementType = 'lending',
+  selectedCustomerTypeId = 'all',
 }) {
   const toast = useToast();
 
   const [statementType, setStatementType] = useState('lending'); // 'lending' | 'full'
   const [selectedCustomerId, setSelectedCustomerId] = useState('all');
+  const [customerTypes, setCustomerTypes] = useState([]);
+  const [customerTypeFilter, setCustomerTypeFilter] = useState(selectedCustomerTypeId || 'all');
   const [periodPreset, setPeriodPreset] = useState('all_time');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -69,11 +74,16 @@ export default function PrintStatementModal({
       } else {
         setSelectedCustomerId('all');
       }
+      setCustomerTypeFilter(selectedCustomerTypeId || 'all');
       setPeriodPreset('all_time');
       setStartDate('');
       setEndDate('');
+
+      customerTypesApi.getCustomerTypes({ activeOnly: false }).then((res) => {
+        setCustomerTypes(res.data || []);
+      });
     }
-  }, [isOpen, customer, initialStatementType]);
+  }, [isOpen, customer, initialStatementType, selectedCustomerTypeId]);
 
   const handlePresetChange = (preset) => {
     setPeriodPreset(preset);
@@ -101,7 +111,12 @@ export default function PrintStatementModal({
 
   const isAll = selectedCustomerId === 'all';
 
-  // Consolidated aggregate summary across all customers
+  const filteredCustomerList = useMemo(() => {
+    if (customerTypeFilter === 'all') return customerList;
+    return customerList.filter((c) => c.customer_type_id === customerTypeFilter);
+  }, [customerList, customerTypeFilter]);
+
+  // Consolidated aggregate summary across all customers (or filtered customers)
   const aggregateSummary = useMemo(() => {
     if (!isAll) return null;
     let totalOut = 0;
@@ -109,7 +124,7 @@ export default function PrintStatementModal({
     let totalSav = 0;
     let activeSavers = 0;
 
-    customerList.forEach((c) => {
+    filteredCustomerList.forEach((c) => {
       const rawBal = (Number(c.account?.total_credit || 0)) - (Number(c.account?.total_debit || 0));
       const out = c.account?.advance_balance !== undefined && c.account?.advance_balance !== null
         ? Math.max(0, Number(c.account?.outstanding_balance || 0))
@@ -126,14 +141,14 @@ export default function PrintStatementModal({
     });
 
     return {
-      count: customerList.length,
+      count: filteredCustomerList.length,
       totalOutstanding: totalOut,
       totalAdvance: totalAdv,
       netReceivable: totalOut - totalAdv,
       totalSavings: totalSav,
       activeSavers,
     };
-  }, [isAll, customerList]);
+  }, [isAll, filteredCustomerList]);
 
   // Selected individual customer
   const selectedCust = !isAll
@@ -155,22 +170,44 @@ export default function PrintStatementModal({
         // ====================================================================
         // CONSOLIDATED ALL-CUSTOMERS FETCH
         // ====================================================================
-        const { data: allCusts, error: custErr } = await supabase
+        let allCusts = [];
+        const { data: custWithTypes, error: custErr } = await supabase
           .from('customers')
           .select(`
             *,
+            customer_type:customer_types(*),
             account:customer_accounts(*),
             savings_account:customer_savings_accounts(*)
           `)
           .order('name', { ascending: true });
 
-        if (custErr) throw new Error(custErr.message);
+        if (custErr) {
+          const { data: custFallback, error: fbErr } = await supabase
+            .from('customers')
+            .select(`
+              *,
+              account:customer_accounts(*),
+              savings_account:customer_savings_accounts(*)
+            `)
+            .order('name', { ascending: true });
+          if (fbErr) throw new Error(fbErr.message);
+          allCusts = custFallback || [];
+        } else {
+          allCusts = custWithTypes || [];
+        }
 
-        const normalizedCusts = (allCusts || []).map((c) => ({
+        let normalizedCusts = (allCusts || []).map((c) => ({
           ...c,
+          customer_type: Array.isArray(c.customer_type) ? c.customer_type[0] : c.customer_type,
           account: Array.isArray(c.account) ? c.account[0] : c.account,
           savings_account: Array.isArray(c.savings_account) ? c.savings_account[0] : c.savings_account,
         }));
+
+        if (customerTypeFilter !== 'all') {
+          normalizedCusts = normalizedCusts.filter((c) => c.customer_type_id === customerTypeFilter);
+        }
+
+        const targetCustIds = new Set(normalizedCusts.map((c) => c.id));
 
         let ledgerQuery = supabase
           .from('ledger_entries')
@@ -236,14 +273,31 @@ export default function PrintStatementModal({
           }
         }
 
+        let filteredLedgerEntries = ledgerEntries || [];
+        let filteredPriorLedgerEntries = priorLedgerEntries || [];
+        let filteredSavingsEntries = savingsEntries || [];
+        let filteredPriorSavingsEntries = priorSavingsEntries || [];
+
+        if (customerTypeFilter !== 'all') {
+          filteredLedgerEntries = filteredLedgerEntries.filter((e) => targetCustIds.has(e.customer_id));
+          filteredPriorLedgerEntries = filteredPriorLedgerEntries.filter((e) => targetCustIds.has(e.customer_id));
+          filteredSavingsEntries = filteredSavingsEntries.filter((s) => targetCustIds.has(s.customer_id));
+          filteredPriorSavingsEntries = filteredPriorSavingsEntries.filter((s) => targetCustIds.has(s.customer_id));
+        }
+
+        const activeTypeName = customerTypeFilter !== 'all'
+          ? (customerTypes.find((t) => t.id === customerTypeFilter)?.name || '')
+          : '';
+
         printStatement({
           isAllCustomers: true,
           statementType,
+          customerTypeName: activeTypeName,
           customers: normalizedCusts,
-          ledgerEntries: ledgerEntries || [],
-          priorLedgerEntries,
-          savingsEntries,
-          priorSavingsEntries,
+          ledgerEntries: filteredLedgerEntries,
+          priorLedgerEntries: filteredPriorLedgerEntries,
+          savingsEntries: filteredSavingsEntries,
+          priorSavingsEntries: filteredPriorSavingsEntries,
           dateRange: {
             startDate,
             endDate,
@@ -257,19 +311,33 @@ export default function PrintStatementModal({
         // INDIVIDUAL CUSTOMER FETCH (Existing untouched flow)
         // ====================================================================
         const cid = selectedCustomerId;
-        const { data: fullCust, error: custErr } = await supabase
+        let targetCust = null;
+        const { data: fullCustWithTypes, error: custErr } = await supabase
           .from('customers')
           .select(`
             *,
+            customer_type:customer_types(*),
             account:customer_accounts(*),
             savings_account:customer_savings_accounts(*)
           `)
           .eq('id', cid)
           .single();
 
-        if (custErr) throw new Error(custErr.message);
-
-        const targetCust = fullCust || selectedCust;
+        if (custErr) {
+          const { data: fullCustFallback, error: fbErr } = await supabase
+            .from('customers')
+            .select(`
+              *,
+              account:customer_accounts(*),
+              savings_account:customer_savings_accounts(*)
+            `)
+            .eq('id', cid)
+            .single();
+          if (fbErr) throw new Error(fbErr.message);
+          targetCust = fullCustFallback || selectedCust;
+        } else {
+          targetCust = fullCustWithTypes || selectedCust;
+        }
         const custAcc = Array.isArray(targetCust.account) ? targetCust.account[0] : targetCust.account;
         const custSav = Array.isArray(targetCust.savings_account) ? targetCust.savings_account[0] : targetCust.savings_account;
 
@@ -358,25 +426,59 @@ export default function PrintStatementModal({
       }
     >
       <div className="space-y-4 font-sans text-xs">
-        {/* Customer Selection Dropdown */}
-        <div>
-          <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-slate-500" />
-            Customer Account <span className="text-rose-500">*</span>
-          </label>
-          <select
-            value={selectedCustomerId}
-            onChange={(e) => setSelectedCustomerId(e.target.value)}
-            className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:border-brand-primary focus:outline-none font-medium text-slate-800"
-          >
-            <option value="all">-- All Customers --</option>
-            <option disabled className="text-slate-300">────────────────────────────────</option>
-            {customerList.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} ({c.phone || 'No Phone'}) - {c.account?.account_number || 'SMS-ACC'}
+        {/* Customer Type & Customer Selection Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Customer Type Filter */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-slate-500" />
+              Customer Type Filter
+            </label>
+            <select
+              value={customerTypeFilter}
+              onChange={(e) => {
+                const newType = e.target.value;
+                setCustomerTypeFilter(newType);
+                if (newType !== 'all' && selectedCustomerId !== 'all') {
+                  const cust = customerList.find((c) => c.id === selectedCustomerId);
+                  if (cust && cust.customer_type_id !== newType) {
+                    setSelectedCustomerId('all');
+                  }
+                }
+              }}
+              className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:border-brand-primary focus:outline-none font-medium text-slate-800"
+            >
+              <option value="all">All Customer Types</option>
+              {customerTypes.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name} {!type.is_active ? '(Inactive)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Customer Selection Dropdown */}
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-slate-500" />
+              Customer Account <span className="text-rose-500">*</span>
+            </label>
+            <select
+              value={selectedCustomerId}
+              onChange={(e) => setSelectedCustomerId(e.target.value)}
+              className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg focus:bg-white focus:border-brand-primary focus:outline-none font-medium text-slate-800"
+            >
+              <option value="all">
+                -- All Customers {customerTypeFilter !== 'all' ? `(${filteredCustomerList.length} matching)` : ''} --
               </option>
-            ))}
-          </select>
+              <option disabled className="text-slate-300">────────────────────────────────</option>
+              {filteredCustomerList.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.phone || 'No Phone'}) - {c.account?.account_number || 'SMS-ACC'}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Selected Customer Current Balances Banner */}

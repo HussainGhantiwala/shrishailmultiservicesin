@@ -25,6 +25,7 @@ import {
   CreditCard,
   Wallet,
   IndianRupee,
+  Tag,
 } from 'lucide-react';
 import PageHeader from '../../../components/common/PageHeader';
 import Button from '../../../components/common/Button';
@@ -38,6 +39,7 @@ import ConfirmationDialog from '../../../components/common/ConfirmationDialog';
 import ReceiptShareModal from '../../../components/common/ReceiptShareModal';
 import PayCustomerBillModal from '../../../components/portal/PayCustomerBillModal';
 import PrintStatementModal from '../../../components/portal/PrintStatementModal';
+import { customerTypesApi } from '../../../services/api/customerTypes';
 
 export default function LedgerPage() {
   const { user, isAdmin, isStaff, isCustomer } = useAuth();
@@ -46,6 +48,8 @@ export default function LedgerPage() {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [customerTypes, setCustomerTypes] = useState([]);
+  const [customerTypeFilter, setCustomerTypeFilter] = useState('all');
   const [ledgerData, setLedgerData] = useState([]);
   const [receiptTarget, setReceiptTarget] = useState(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
@@ -94,6 +98,13 @@ export default function LedgerPage() {
     });
   }, []);
 
+  // Fetch customer types on mount
+  useEffect(() => {
+    customerTypesApi.getCustomerTypes({ activeOnly: false }).then((res) => {
+      setCustomerTypes(res.data || []);
+    });
+  }, []);
+
   // Fetch ledger entries whenever customer or filters change
   const fetchLedger = async () => {
     setLoading(true);
@@ -101,6 +112,7 @@ export default function LedgerPage() {
       const res = await ledgerApi.getLedgerEntries(selectedCustomerId, {
         searchQuery,
         entryType: entryTypeFilter,
+        customerTypeId: customerTypeFilter,
         startDate,
         endDate,
         showDeleted,
@@ -116,7 +128,7 @@ export default function LedgerPage() {
 
   useEffect(() => {
     fetchLedger();
-  }, [selectedCustomerId, searchQuery, entryTypeFilter, startDate, endDate, showDeleted]);
+  }, [selectedCustomerId, searchQuery, entryTypeFilter, customerTypeFilter, startDate, endDate, showDeleted]);
 
   // Selected customer details
   const selectedCustomer = useMemo(() => {
@@ -690,6 +702,19 @@ export default function LedgerPage() {
 
           <div className="flex flex-wrap items-center gap-2 text-xs w-full sm:w-auto justify-end">
             <select
+              value={customerTypeFilter}
+              onChange={(e) => setCustomerTypeFilter(e.target.value)}
+              className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none"
+            >
+              <option value="all">All Customer Types</option>
+              {customerTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} {!t.is_active ? '(Inactive)' : ''}
+                </option>
+              ))}
+            </select>
+
+            <select
               value={entryTypeFilter}
               onChange={(e) => setEntryTypeFilter(e.target.value)}
               className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none"
@@ -844,6 +869,7 @@ export default function LedgerPage() {
         onClose={() => setIsPrintModalOpen(false)}
         customer={selectedCustomerId ? customers.find((c) => c.id === selectedCustomerId) : null}
         customers={customers}
+        selectedCustomerTypeId={customerTypeFilter}
         initialStatementType="lending"
       />
     </div>

@@ -1,19 +1,15 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   FileText,
-  Calendar,
   IndianRupee,
   TrendingUp,
   ArrowDownRight,
-  Download,
   RefreshCw,
   Users,
   Filter,
   Clock,
   Printer,
   FileSpreadsheet,
-  Search,
-  ChevronDown,
   PiggyBank,
   Wallet,
   Receipt,
@@ -29,9 +25,10 @@ import StatusBadge from '../../../components/common/StatusBadge';
 import SearchBar from '../../../components/common/SearchBar';
 import { reportsApi } from '../../../services/api/reports';
 import { customerApi } from '../../../services/api/customers';
+import { customerTypesApi } from '../../../services/api/customerTypes';
 import { savingsApi } from '../../../services/api/savings';
 import { formatRupees } from '../../../utils/currency';
-import { formatDate, formatDateTime, getTodayISO } from '../../../utils/date';
+import { formatDateTime, getTodayISO } from '../../../utils/date';
 import { exportToCSV, printReport } from '../../../utils/export';
 import { useToast } from '../../../context/ToastContext';
 import ReportTimelineModal from '../components/ReportTimelineModal';
@@ -44,15 +41,19 @@ export default function ReportsPage() {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printStatementInitialType, setPrintStatementInitialType] = useState('lending');
 
+  // Customer types list and filter
+  const [customerTypes, setCustomerTypes] = useState([]);
+  const [customerTypeFilter, setCustomerTypeFilter] = useState('all');
+
   // Customers list for dropdown
   const [customers, setCustomers] = useState([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('all');
 
   // Date Presets & Custom Range
-  const [datePreset, setDatePreset] = useState('today');
+  const [datePreset, setDatePreset] = useState('allTime');
   const [dateRange, setDateRange] = useState(() => {
     const today = getTodayISO();
-    return { startDate: today, endDate: today };
+    return { startDate: '1970-01-01', endDate: today };
   });
 
   // Additional Filters
@@ -80,10 +81,13 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Fetch initial customers list
+  // Fetch initial customers list & customer types
   useEffect(() => {
     customerApi.getCustomers().then((res) => {
       setCustomers(res.data || []);
+    });
+    customerTypesApi.getCustomerTypes({ activeOnly: false }).then((res) => {
+      setCustomerTypes(res.data || []);
     });
   }, []);
 
@@ -92,10 +96,17 @@ export default function ReportsPage() {
     if (preset === 'custom') return;
 
     const today = new Date();
-    const start = new Date(today);
-    const end = new Date(today);
+    const todayStr = getTodayISO();
+    let start = new Date(today);
+    let end = new Date(today);
 
-    if (preset === 'yesterday') {
+    if (preset === 'allTime') {
+      setDateRange({
+        startDate: '1970-01-01',
+        endDate: todayStr,
+      });
+      return;
+    } else if (preset === 'yesterday') {
       start.setDate(start.getDate() - 1);
       end.setDate(end.getDate() - 1);
     } else if (preset === 'thisWeek') {
@@ -112,47 +123,73 @@ export default function ReportsPage() {
     });
   };
 
+  const isFetchingLedgerRef = useRef(false);
   const fetchLedgerReport = useCallback(async () => {
+    if (isFetchingLedgerRef.current) return;
+    isFetchingLedgerRef.current = true;
     try {
       setLoading(true);
       setError(null);
-      const data = await reportsApi.getLedgerReport(dateRange.startDate, dateRange.endDate, selectedCustomerId);
+      const data = await reportsApi.getLedgerReport(
+        dateRange.startDate,
+        dateRange.endDate,
+        selectedCustomerId,
+        customerTypeFilter !== 'all' ? customerTypeFilter : null
+      );
       setReportData(data);
     } catch (err) {
       setError(err.message || 'Failed to fetch ledger report');
-      toast.error('Failed to fetch ledger report');
+      toast.error(err.message || 'Failed to fetch ledger report');
     } finally {
+      isFetchingLedgerRef.current = false;
       setLoading(false);
     }
-  }, [dateRange.startDate, dateRange.endDate, selectedCustomerId, toast]);
+  }, [dateRange.startDate, dateRange.endDate, selectedCustomerId, customerTypeFilter]);
 
+  const isFetchingOutstandingRef = useRef(false);
   const fetchOutstandingReport = useCallback(async () => {
+    if (isFetchingOutstandingRef.current) return;
+    isFetchingOutstandingRef.current = true;
     try {
       setLoading(true);
       setError(null);
-      const data = await reportsApi.getOutstandingReport(outstandingSort, outstandingSearch);
+      const data = await reportsApi.getOutstandingReport(
+        outstandingSort,
+        outstandingSearch,
+        customerTypeFilter
+      );
       setOutstandingData(data || []);
     } catch (err) {
       setError(err.message || 'Failed to fetch outstanding report');
-      toast.error('Failed to fetch outstanding report');
+      toast.error(err.message || 'Failed to fetch outstanding report');
     } finally {
+      isFetchingOutstandingRef.current = false;
       setLoading(false);
     }
-  }, [outstandingSort, outstandingSearch, toast]);
+  }, [outstandingSort, outstandingSearch, customerTypeFilter]);
 
+  const isFetchingSavingsRef = useRef(false);
   const fetchSavingsReport = useCallback(async () => {
+    if (isFetchingSavingsRef.current) return;
+    isFetchingSavingsRef.current = true;
     try {
       setLoading(true);
       setError(null);
-      const data = await savingsApi.getSavingsReport(dateRange.startDate, dateRange.endDate, selectedCustomerId);
+      const data = await savingsApi.getSavingsReport(
+        dateRange.startDate,
+        dateRange.endDate,
+        selectedCustomerId,
+        customerTypeFilter !== 'all' ? customerTypeFilter : null
+      );
       setSavingsReportData(data || {});
     } catch (err) {
       setError(err.message || 'Failed to fetch savings report');
-      toast.error('Failed to fetch savings report');
+      toast.error(err.message || 'Failed to fetch savings report');
     } finally {
+      isFetchingSavingsRef.current = false;
       setLoading(false);
     }
-  }, [dateRange.startDate, dateRange.endDate, selectedCustomerId, toast]);
+  }, [dateRange.startDate, dateRange.endDate, selectedCustomerId, customerTypeFilter]);
 
   useEffect(() => {
     if (activeTab === 'ledger') {
@@ -164,29 +201,39 @@ export default function ReportsPage() {
     }
   }, [activeTab, fetchLedgerReport, fetchOutstandingReport, fetchSavingsReport]);
 
-  // Realtime updates subscription
+  // Keep references to current tab and fetch handlers for stable realtime listener
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const fetchLedgerRef = useRef(fetchLedgerReport);
+  fetchLedgerRef.current = fetchLedgerReport;
+  const fetchOutstandingRef = useRef(fetchOutstandingReport);
+  fetchOutstandingRef.current = fetchOutstandingReport;
+  const fetchSavingsRef = useRef(fetchSavingsReport);
+  fetchSavingsRef.current = fetchSavingsReport;
+
+  // Realtime updates subscription (runs once on mount, cleaned up on unmount)
   useEffect(() => {
     const channelId = `reports-changes-${Date.now()}`;
     const channel = supabase
       .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger_entries' }, () => {
-        if (activeTab === 'ledger') fetchLedgerReport();
+        if (activeTabRef.current === 'ledger') fetchLedgerRef.current();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_accounts' }, () => {
-        if (activeTab === 'outstanding') fetchOutstandingReport();
+        if (activeTabRef.current === 'outstanding') fetchOutstandingRef.current();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_savings_accounts' }, () => {
-        if (activeTab === 'savings') fetchSavingsReport();
+        if (activeTabRef.current === 'savings') fetchSavingsRef.current();
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'customer_savings_transactions' }, () => {
-        if (activeTab === 'savings') fetchSavingsReport();
+        if (activeTabRef.current === 'savings') fetchSavingsRef.current();
       })
       .subscribe();
 
     return () => {
       if (channel) supabase.removeChannel(channel);
     };
-  }, [activeTab, fetchLedgerReport, fetchOutstandingReport, fetchSavingsReport]);
+  }, []);
 
   // Filter raw entries based on combined client-side filters
   const filteredEntries = useMemo(() => {
@@ -282,6 +329,9 @@ export default function ReportsPage() {
 
   // Export handlers for Ledger Report
   const handleExportLedgerCSV = () => {
+    const selectedTypeName = customerTypeFilter !== 'all'
+      ? (customerTypes.find((t) => t.id === customerTypeFilter)?.name || 'Filtered')
+      : 'All_Types';
     const cols = [
       { header: 'Date & Time', accessor: (r) => formatDateTime(r.created_at) },
       { header: 'Customer Name', accessorKey: 'customer_name' },
@@ -292,7 +342,7 @@ export default function ReportsPage() {
       { header: 'Particulars / Description', accessorKey: 'description' },
       { header: 'Amount (₹)', accessorKey: 'amount' },
     ];
-    exportToCSV('Ledger_Report', cols, filteredEntries);
+    exportToCSV(`Ledger_Report_${selectedTypeName}`, cols, filteredEntries);
   };
 
   const handlePrintLedger = () => {
@@ -302,8 +352,12 @@ export default function ReportsPage() {
 
   // Export handlers for Outstanding Report
   const handleExportOutstandingCSV = () => {
+    const selectedTypeName = customerTypeFilter !== 'all'
+      ? (customerTypes.find((t) => t.id === customerTypeFilter)?.name || 'Filtered')
+      : 'All_Types';
     const cols = [
       { header: 'Customer Name', accessorKey: 'name' },
+      { header: 'Customer Type', accessor: (r) => r.customer_type?.name || '-' },
       { header: 'Phone Number', accessorKey: 'phone' },
       { header: 'Account Number', accessor: (r) => r.account?.account_number || '-' },
       { header: 'Total Given (₹)', accessor: (r) => r.account?.total_credit || 0 },
@@ -313,12 +367,16 @@ export default function ReportsPage() {
       { header: 'Net Receivable (₹)', accessor: (r) => (Number(r.account?.outstanding_balance || 0) - Number(r.account?.advance_balance || 0)) },
       { header: 'Account Status', accessorKey: 'status' },
     ];
-    exportToCSV('Outstanding_Customer_Report', cols, outstandingData || []);
+    exportToCSV(`Outstanding_Customer_Report_${selectedTypeName}`, cols, outstandingData || []);
   };
 
   const handlePrintOutstanding = () => {
+    const selectedTypeName = customerTypeFilter !== 'all'
+      ? (customerTypes.find((t) => t.id === customerTypeFilter)?.name || 'Filtered')
+      : 'All Customer Types';
     const cols = [
       { header: 'Customer Name', accessorKey: 'name' },
+      { header: 'Customer Type', render: (r) => r.customer_type?.name || '-' },
       { header: 'Phone', accessorKey: 'phone' },
       { header: 'Account No', render: (r) => r.account?.account_number || '-' },
       { header: 'Total Given', render: (r) => formatRupees(r.account?.total_credit || 0) },
@@ -329,12 +387,13 @@ export default function ReportsPage() {
     ];
     const meta = {
       'Report Type': 'Customer Balances & Outstanding Statement',
+      'Customer Type Scope': selectedTypeName,
       'Total Registered Accounts': outstandingSummary.totalAccounts,
       'Total Outstanding Dues': formatRupees(outstandingSummary.totalOutstanding),
       'Total Customer Advances': formatRupees(outstandingSummary.totalAdvance),
       'Net Receivable': formatRupees(outstandingSummary.netReceivable),
     };
-    printReport('Outstanding Customer Statement', meta, cols, outstandingData || []);
+    printReport(`Outstanding Customer Statement (${selectedTypeName})`, meta, cols, outstandingData || []);
   };
 
   // Filter raw savings entries based on combined filters
@@ -362,6 +421,9 @@ export default function ReportsPage() {
 
   // Export handlers for Savings Report
   const handleExportSavingsCSV = () => {
+    const selectedTypeName = customerTypeFilter !== 'all'
+      ? (customerTypes.find((t) => t.id === customerTypeFilter)?.name || 'Filtered')
+      : 'All_Types';
     const cols = [
       { header: 'Date & Time', accessor: (r) => formatDateTime(r.created_at) },
       { header: 'Customer Name', accessorKey: 'customer_name' },
@@ -373,7 +435,7 @@ export default function ReportsPage() {
       { header: 'Amount (₹)', accessorKey: 'amount' },
       { header: 'Savings Balance After (₹)', accessorKey: 'balance_after' },
     ];
-    exportToCSV('Customer_Savings_Report', cols, filteredSavingsEntries);
+    exportToCSV(`Customer_Savings_Report_${selectedTypeName}`, cols, filteredSavingsEntries);
   };
 
   const handlePrintSavings = () => {
@@ -581,6 +643,18 @@ export default function ReportsPage() {
       render: (row) => <span className="font-mono text-slate-700">{row.phone || '-'}</span>,
     },
     {
+      header: 'Customer Type',
+      render: (row) => {
+        const typeName = row.customer_type?.name;
+        if (!typeName) return <span className="text-slate-400">-</span>;
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+            {typeName}
+          </span>
+        );
+      },
+    },
+    {
       header: 'Account No',
       render: (row) => <span className="font-mono text-slate-500">{row.account?.account_number || '-'}</span>,
     },
@@ -624,6 +698,12 @@ export default function ReportsPage() {
       render: (row) => <StatusBadge status={row.status || 'active'} label={(row.status || 'active').toUpperCase()} />,
     },
   ];
+
+  // Filter dropdown customers by customerTypeFilter if selected
+  const filteredCustomersForDropdown = useMemo(() => {
+    if (customerTypeFilter === 'all') return customers;
+    return customers.filter((c) => c.customer_type_id === customerTypeFilter);
+  }, [customers, customerTypeFilter]);
 
   return (
     <div className="space-y-6 font-sans text-xs">
@@ -705,9 +785,35 @@ export default function ReportsPage() {
         <div className="space-y-6">
           {/* Filter Card */}
           <Card className="p-4 shadow-xs border-slate-200 bg-white rounded-xl space-y-4">
-            {/* Top row: Customer, Date presets, Custom date range, Generate button */}
+            {/* Top row: Customer Type, Customer Account, Entry Type, Payment Method */}
             <div className="flex flex-col lg:flex-row gap-4 items-end justify-between border-b border-slate-100 pb-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 flex-1 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1 w-full">
+                {/* Customer Type Selector */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Type</label>
+                  <select
+                    value={customerTypeFilter}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setCustomerTypeFilter(newType);
+                      if (newType !== 'all' && selectedCustomerId !== 'all') {
+                        const cust = customers.find((c) => c.id === selectedCustomerId);
+                        if (cust && cust.customer_type_id !== newType) {
+                          setSelectedCustomerId('all');
+                        }
+                      }
+                    }}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
+                  >
+                    <option value="all">All Customer Types</option>
+                    {customerTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name} {!type.is_active ? '(Inactive)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Customer Selector */}
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Account</label>
@@ -716,8 +822,10 @@ export default function ReportsPage() {
                     onChange={(e) => setSelectedCustomerId(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
                   >
-                    <option value="all">✔ All Customers</option>
-                    {customers.map((c) => (
+                    <option value="all">
+                      ✔ All Customers {customerTypeFilter !== 'all' ? `(${filteredCustomersForDropdown.length} matching)` : ''}
+                    </option>
+                    {filteredCustomersForDropdown.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.phone})
                       </option>
@@ -770,7 +878,7 @@ export default function ReportsPage() {
               {/* Presets */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] font-bold text-slate-500 mr-1">Period:</span>
-                {['today', 'yesterday', 'thisWeek', 'thisMonth', 'custom'].map((preset) => (
+                {['allTime', 'today', 'yesterday', 'thisWeek', 'thisMonth', 'custom'].map((preset) => (
                   <button
                     key={preset}
                     onClick={() => handleDatePresetChange(preset)}
@@ -780,7 +888,9 @@ export default function ReportsPage() {
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {preset === 'thisWeek'
+                    {preset === 'allTime'
+                      ? 'All Time'
+                      : preset === 'thisWeek'
                       ? 'This Week'
                       : preset === 'thisMonth'
                       ? 'This Month'
@@ -938,7 +1048,21 @@ export default function ReportsPage() {
           <Card className="p-4 shadow-xs border-slate-200 bg-white rounded-xl">
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
               <SearchBar placeholder="Search customer name, phone..." value={outstandingSearch} onChange={setOutstandingSearch} className="w-full sm:w-72" />
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Customer Type:</span>
+                <select
+                  value={customerTypeFilter}
+                  onChange={(e) => setCustomerTypeFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
+                >
+                  <option value="all">All Customer Types</option>
+                  {customerTypes.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.name} {!type.is_active ? '(Inactive)' : ''}
+                    </option>
+                  ))}
+                </select>
+
                 <span className="text-xs font-bold text-slate-600 whitespace-nowrap">Sort By:</span>
                 <select
                   value={outstandingSort}
@@ -980,6 +1104,32 @@ export default function ReportsPage() {
           <Card className="p-4 shadow-xs border-slate-200 bg-white rounded-xl space-y-4">
             <div className="flex flex-col lg:flex-row gap-4 items-end justify-between border-b border-slate-100 pb-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 flex-1 w-full">
+                {/* Customer Type Selector */}
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Type</label>
+                  <select
+                    value={customerTypeFilter}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setCustomerTypeFilter(newType);
+                      if (newType !== 'all' && selectedCustomerId !== 'all') {
+                        const cust = customers.find((c) => c.id === selectedCustomerId);
+                        if (cust && cust.customer_type_id !== newType) {
+                          setSelectedCustomerId('all');
+                        }
+                      }
+                    }}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
+                  >
+                    <option value="all">All Customer Types</option>
+                    {customerTypes.map((type) => (
+                      <option key={type.id} value={type.id}>
+                        {type.name} {!type.is_active ? '(Inactive)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Customer Selector */}
                 <div>
                   <label className="text-[11px] font-bold text-slate-700 block mb-1">Customer Account</label>
@@ -988,8 +1138,10 @@ export default function ReportsPage() {
                     onChange={(e) => setSelectedCustomerId(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none"
                   >
-                    <option value="all">✔ All Customers</option>
-                    {customers.map((c) => (
+                    <option value="all">
+                      ✔ All Customers {customerTypeFilter !== 'all' ? `(${filteredCustomersForDropdown.length} matching)` : ''}
+                    </option>
+                    {filteredCustomersForDropdown.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name} ({c.phone})
                       </option>
@@ -1019,7 +1171,7 @@ export default function ReportsPage() {
               {/* Presets */}
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] font-bold text-slate-500 mr-1">Period:</span>
-                {['today', 'yesterday', 'thisWeek', 'thisMonth', 'custom'].map((preset) => (
+                {['allTime', 'today', 'yesterday', 'thisWeek', 'thisMonth', 'custom'].map((preset) => (
                   <button
                     key={preset}
                     onClick={() => handleDatePresetChange(preset)}
@@ -1029,7 +1181,9 @@ export default function ReportsPage() {
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {preset === 'thisWeek'
+                    {preset === 'allTime'
+                      ? 'All Time'
+                      : preset === 'thisWeek'
                       ? 'This Week'
                       : preset === 'thisMonth'
                       ? 'This Month'
@@ -1144,6 +1298,7 @@ export default function ReportsPage() {
         customer={selectedCustomerId !== 'all' ? customers.find((c) => c.id === selectedCustomerId) : null}
         customers={customers}
         initialStatementType={printStatementInitialType}
+        selectedCustomerTypeId={customerTypeFilter}
       />
     </div>
   );

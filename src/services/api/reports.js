@@ -1,54 +1,50 @@
 import { supabase } from '../../lib/supabase';
+import { customerApi } from './customers';
 
 /**
  * Reports API Service — backed entirely by Supabase RPC functions and direct queries
  */
 export const reportsApi = {
   /**
-   * Get ledger report for a date range and optional customer filter via RPC
+   * Get ledger report for a date range, optional customer filter, and optional customer type filter via canonical RPC
    */
-  async getLedgerReport(startDate, endDate, customerId = null) {
+  async getLedgerReport(startDate, endDate, customerId = null, customerTypeId = null) {
     const pCustomerId = customerId && customerId !== 'all' ? customerId : null;
+    const pCustomerTypeId = customerTypeId && customerTypeId !== 'all' ? customerTypeId : null;
+    const pStartDate = startDate || null;
+    const pEndDate = endDate || null;
+
     const { data, error } = await supabase.rpc('get_ledger_report', {
-      p_start_date: startDate,
-      p_end_date: endDate,
+      p_start_date: pStartDate,
+      p_end_date: pEndDate,
       p_customer_id: pCustomerId,
+      p_customer_type_id: pCustomerTypeId,
     });
-    if (error) throw new Error(error.message);
+
+    if (error) {
+      console.error('get_ledger_report RPC error:', error);
+      throw new Error(error.message);
+    }
+
     return data;
   },
 
   /**
-   * Get outstanding customer report — all customers with their account balances & last payment dates
+   * Get outstanding customer report — all customers with their account balances & last payment dates.
+   * Supports customerTypeId filtering.
    */
-  async getOutstandingReport(sortOption = 'outstanding_desc', searchQuery = '') {
-    let query = supabase
-      .from('customers')
-      .select(`
-        id, name, phone, email, status, created_at,
-        account:customer_accounts(
-          account_number, outstanding_balance, advance_balance, total_paid, total_credit, total_debit, status, updated_at
-        )
-      `);
+  async getOutstandingReport(sortOption = 'outstanding_desc', searchQuery = '', customerTypeId = 'all') {
+    const { data: customersList, error: custErr } = await customerApi.getCustomers(
+      searchQuery,
+      'all',
+      customerTypeId
+    );
 
-    if (searchQuery && searchQuery.trim()) {
-      query = query.or(`name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
-    }
-
-    if (sortOption === 'newest') {
-      query = query.order('created_at', { ascending: false });
-    } else if (sortOption === 'oldest') {
-      query = query.order('created_at', { ascending: true });
-    } else if (sortOption === 'name_asc') {
-      query = query.order('name', { ascending: true });
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
+    if (custErr) throw new Error(custErr.message);
 
     // Normalize relation and calculate independent outstanding and advance balances
-    let normalized = (data || []).map((c) => {
-      const acc = Array.isArray(c.account) ? c.account[0] : c.account;
+    let normalized = (customersList || []).map((c) => {
+      const acc = c.account;
       if (!acc) return { ...c, account: null };
 
       const raw = Number(acc.total_credit || 0) - Number(acc.total_debit || 0);
@@ -82,6 +78,12 @@ export const reportsApi = {
       normalized.sort((a, b) => Number(a.account?.outstanding_balance || 0) - Number(b.account?.outstanding_balance || 0));
     } else if (sortOption === 'advance_desc') {
       normalized.sort((a, b) => Number(b.account?.advance_balance || 0) - Number(a.account?.advance_balance || 0));
+    } else if (sortOption === 'newest') {
+      normalized.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    } else if (sortOption === 'oldest') {
+      normalized.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    } else if (sortOption === 'name_asc') {
+      normalized.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     }
 
     return normalized;

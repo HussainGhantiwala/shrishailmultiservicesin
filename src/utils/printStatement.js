@@ -429,8 +429,8 @@ export const generateIndividualStatementHTML = ({
         <td style="vertical-align: top; width: 65%;">
           <h1 class="brand-title">Shrishail Multi Services</h1>
           <div class="brand-address">
-            At Post Kasgi, Taluka Omerga<br>
-            Dist. Dharashiv, Maharashtra, India<br>
+            Kasagi, Akkalkot<br>
+            Dist. Solapur, Maharashtra, India<br>
             Contact: +91 98506 67573 &bull; Smsuntnure123@gmail.com
           </div>
         </td>
@@ -448,19 +448,23 @@ export const generateIndividualStatementHTML = ({
     <!-- Customer Metadata Grid -->
     <div class="meta-grid">
       <div class="meta-row">
-        <div class="meta-cell" style="width: 32%;">
+        <div class="meta-cell" style="width: 26%;">
           <div class="meta-label">Customer Name</div>
           <div class="meta-val" style="font-size: 12.5px; color: #1e3a8a;">${customerName}</div>
         </div>
-        <div class="meta-cell" style="width: 25%;">
+        <div class="meta-cell" style="width: 18%;">
+          <div class="meta-label">Customer Type</div>
+          <div class="meta-val font-semibold" style="color: #2563eb;">${customer?.customer_type?.name || 'Unassigned'}</div>
+        </div>
+        <div class="meta-cell" style="width: 20%;">
           <div class="meta-label">Account Number</div>
           <div class="meta-val font-mono">${accountNumber}</div>
         </div>
-        <div class="meta-cell" style="width: 23%;">
+        <div class="meta-cell" style="width: 18%;">
           <div class="meta-label">Phone Number</div>
           <div class="meta-val">${customerPhone}</div>
         </div>
-        <div class="meta-cell" style="width: 20%;">
+        <div class="meta-cell" style="width: 18%;">
           <div class="meta-label">Statement Period</div>
           <div class="meta-val">${periodStr}</div>
         </div>
@@ -733,6 +737,7 @@ export const generateIndividualStatementHTML = ({
 export const generateConsolidatedStatementHTML = ({
   statementType = 'lending', // 'lending' | 'full'
   customers = [],
+  customerTypeName = '',
   ledgerEntries = [],
   priorLedgerEntries = [],
   savingsEntries = [],
@@ -805,6 +810,7 @@ export const generateConsolidatedStatementHTML = ({
     const custName = c.name || 'Unnamed Customer';
     const custPhone = c.phone || '-';
     const custAccountNo = c.account?.account_number || `SMS-${index + 1001}`;
+    const custType = c.customer_type?.name || c.customer_type_name || '';
 
     const custLedger = ledgerByCustomer[custId] || [];
     const custPrior = priorLedgerByCustomer[custId] || [];
@@ -931,6 +937,7 @@ export const generateConsolidatedStatementHTML = ({
       name: custName,
       phone: custPhone,
       accountNo: custAccountNo,
+      customerType: custType,
       given: custGiven,
       received: custReceived,
       outstanding: custOutstanding,
@@ -1269,14 +1276,14 @@ export const generateConsolidatedStatementHTML = ({
         <td style="vertical-align: top; width: 62%;">
           <h1 class="brand-title">Shrishail Multi Services</h1>
           <div class="brand-address">
-            At Post Kasgi, Taluka Omerga<br>
-            Dist. Dharashiv, Maharashtra, India<br>
+            Kasgi, Akkalkot<br>
+            Dist. Solapur, Maharashtra, India<br>
             Contact: +91 98506 67573 &bull; Smsuntnure123@gmail.com
           </div>
         </td>
         <td style="vertical-align: top; text-align: right; width: 38%;">
           <div class="statement-badge">
-            ${isFull ? 'All Customers — Full Account Statement' : 'All Customers — Lending Statement Only'}
+            ${customerTypeName ? `${customerTypeName} — ` : 'All Customers — '}${isFull ? 'Full Account Statement' : 'Lending Statement Only'}
           </div>
           <div style="font-size: 9.5px; color: #64748b; margin-top: 5px;">
             Generated: <strong>${formatDateTime(new Date())}</strong>
@@ -1288,21 +1295,25 @@ export const generateConsolidatedStatementHTML = ({
     <!-- Metadata Grid -->
     <div class="meta-grid">
       <div class="meta-row">
-        <div class="meta-cell" style="width: 25%;">
+        <div class="meta-cell" style="width: 20%;">
           <div class="meta-label">Report Scope</div>
-          <div class="meta-val" style="color: #1e3a8a;">All Customers (${customers.length} Accounts)</div>
+          <div class="meta-val" style="color: #1e3a8a;">${customers.length} Accounts</div>
         </div>
-        <div class="meta-cell" style="width: 25%;">
+        <div class="meta-cell" style="width: 20%;">
+          <div class="meta-label">Customer Type</div>
+          <div class="meta-val" style="font-weight: 700; color: #0284c7;">${customerTypeName || 'All Customer Types'}</div>
+        </div>
+        <div class="meta-cell" style="width: 20%;">
           <div class="meta-label">Statement Period</div>
           <div class="meta-val">${periodStr}</div>
         </div>
-        <div class="meta-cell" style="width: 25%;">
+        <div class="meta-cell" style="width: 20%;">
           <div class="meta-label">Statement Type</div>
           <div class="meta-val">${isFull ? 'Full Account (Lending & Savings)' : 'Lending Statement Only'}</div>
         </div>
-        <div class="meta-cell" style="width: 25%;">
+        <div class="meta-cell" style="width: 20%;">
           <div class="meta-label">Accounting Standard</div>
-          <div class="meta-val">Independent Customer Ledgers</div>
+          <div class="meta-val">Independent Ledgers</div>
         </div>
       </div>
     </div>
@@ -1431,7 +1442,10 @@ export const generateConsolidatedStatementHTML = ({
         ` : customerRows.map((r, i) => `
           <tr class="${i % 2 === 0 ? 'bg-white' : 'bg-alt'}">
             <td style="text-align: center; color: #64748b;">${i + 1}</td>
-            <td><strong>${r.name}</strong></td>
+            <td>
+              <strong>${r.name}</strong>
+              ${r.customerType ? `<span style="font-size: 8px; background: #e0f2fe; color: #0369a1; padding: 1px 4px; border-radius: 3px; margin-left: 4px; font-weight: 600;">${r.customerType}</span>` : ''}
+            </td>
             <td class="font-mono text-slate-700">${r.accountNo}</td>
             <td class="font-mono text-slate-600">${r.phone}</td>
             <td style="text-align: right;" class="font-mono font-bold ${r.given > 0 ? 'text-rose-600' : 'text-slate-400'}">
@@ -1510,6 +1524,7 @@ export const generateConsolidatedStatementHTML = ({
             <td>
               <strong>${r.name}</strong>
               <span style="font-size: 8.5px; color: #64748b; margin-left: 4px;">(${r.phone})</span>
+              ${r.customerType ? `<span style="font-size: 8px; background: #e0f2fe; color: #0369a1; padding: 1px 4px; border-radius: 3px; margin-left: 4px; font-weight: 600;">${r.customerType}</span>` : ''}
             </td>
             <td class="font-mono text-slate-700">${r.accountNo}</td>
             <td style="text-align: right;" class="font-mono font-bold ${r.outstanding > 0 ? 'text-rose-700' : 'text-slate-400'}">
