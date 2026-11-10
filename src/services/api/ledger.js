@@ -192,6 +192,7 @@ export const ledgerApi = {
         *,
         customer:customers(
           id, name, phone, email, status, customer_type_id,
+          customer_type:customer_types(id, name),
           account:customer_accounts(id, account_number, outstanding_balance, total_paid, total_credit, total_debit, status)
         )
       `, { count: 'exact' })
@@ -229,16 +230,66 @@ export const ledgerApi = {
     const to = from + pageSize - 1;
     query = query.range(from, to);
 
-    const { data, count, error } = await query;
-    if (error) throw new Error(error.message);
+    let { data, count, error } = await query;
 
-    // Normalize customer account structure
+    // Resilient fallback if nested customer_types join isn't cached or supported in schema cache
+    if (error && (error.code === 'PGRST200' || error.message?.includes('customer_types') || error.message?.includes('customer_type'))) {
+      let fallbackQuery = supabase
+        .from('ledger_entries')
+        .select(`
+          *,
+          customer:customers(
+            id, name, phone, email, status, customer_type_id,
+            account:customer_accounts(id, account_number, outstanding_balance, total_paid, total_credit, total_debit, status)
+          )
+        `, { count: 'exact' })
+        .order('created_at', { ascending: false });
+
+      if (!isAllCustomers) {
+        fallbackQuery = fallbackQuery.eq('customer_id', customerId);
+      } else if (matchingCustomerIds !== null) {
+        fallbackQuery = fallbackQuery.in('customer_id', matchingCustomerIds);
+      }
+
+      if (!showDeleted) {
+        fallbackQuery = fallbackQuery.eq('is_deleted', false);
+      }
+
+      if (entryType && entryType !== 'all') {
+        fallbackQuery = fallbackQuery.eq('entry_type', entryType);
+      }
+
+      if (startDate) {
+        fallbackQuery = fallbackQuery.gte('created_at', `${startDate}T00:00:00Z`);
+      }
+
+      if (endDate) {
+        fallbackQuery = fallbackQuery.lte('created_at', `${endDate}T23:59:59Z`);
+      }
+
+      if (searchQuery && searchQuery.trim()) {
+        fallbackQuery = fallbackQuery.or(
+          `description.ilike.%${searchQuery}%,reference_no.ilike.%${searchQuery}%,notes.ilike.%${searchQuery}%,payment_method.ilike.%${searchQuery}%`
+        );
+      }
+
+      fallbackQuery = fallbackQuery.range(from, to);
+      const fallbackRes = await fallbackQuery;
+      if (fallbackRes.error) throw new Error(fallbackRes.error.message);
+      data = fallbackRes.data;
+      count = fallbackRes.count;
+    } else if (error) {
+      throw new Error(error.message);
+    }
+
+    // Normalize customer account and customer type structure
     const normalizedData = (data || []).map((entry) => {
-      const cust = entry.customer;
+      const cust = Array.isArray(entry.customer) ? entry.customer[0] : entry.customer;
       const acc = cust?.account ? (Array.isArray(cust.account) ? cust.account[0] : cust.account) : null;
+      const type = cust?.customer_type ? (Array.isArray(cust.customer_type) ? cust.customer_type[0] : cust.customer_type) : null;
       return {
         ...entry,
-        customer: cust ? { ...cust, account: acc } : null,
+        customer: cust ? { ...cust, account: acc, customer_type: type } : null,
       };
     });
 

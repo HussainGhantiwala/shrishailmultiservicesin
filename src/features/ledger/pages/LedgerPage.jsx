@@ -359,6 +359,39 @@ export default function LedgerPage() {
     }
   };
 
+  // Helper to resolve Customer Type name for any ledger row
+  const getRowCustomerTypeName = (row) => {
+    // 1. Direct from joined customer.customer_type
+    const joinedType = row.customer?.customer_type;
+    const directName = typeof joinedType === 'object' ? joinedType?.name : null;
+    if (directName && directName.trim()) return directName.trim();
+
+    // 2. Lookup by customer_type_id via master customerTypes list
+    const typeId = row.customer?.customer_type_id || row.customer_type_id;
+    if (typeId && customerTypes?.length > 0) {
+      const match = customerTypes.find((t) => t.id === typeId);
+      if (match?.name) return match.name.trim();
+    }
+
+    // 3. Lookup customer in loaded customers list
+    const targetCustId = row.customer_id || row.customer?.id;
+    if (targetCustId && customers?.length > 0) {
+      const custObj = customers.find((c) => c.id === targetCustId);
+      if (custObj?.customer_type?.name) return custObj.customer_type.name.trim();
+      if (custObj?.customer_type_id && customerTypes?.length > 0) {
+        const match = customerTypes.find((t) => t.id === custObj.customer_type_id);
+        if (match?.name) return match.name.trim();
+      }
+    }
+
+    // 4. If selected customer is an individual customer, fallback to selectedCustomer
+    if (selectedCustomerId && selectedCustomerId !== 'all' && selectedCustomer?.customer_type?.name) {
+      return selectedCustomer.customer_type.name.trim();
+    }
+
+    return 'Unassigned';
+  };
+
   // Data Table Columns
   const columns = [
     {
@@ -371,21 +404,41 @@ export default function LedgerPage() {
         </div>
       ),
     },
-    ...(selectedCustomerId === 'all'
-      ? [
-          {
-            header: 'Customer Account',
-            render: (row) => (
-              <div>
-                <div className="font-semibold text-slate-900">{row.customer?.name || 'Unknown'}</div>
-                <div className="text-[10px] text-slate-500 font-mono">
-                  {row.customer?.phone || ''} • {row.customer?.account?.account_number || '-'}
-                </div>
-              </div>
-            ),
-          },
-        ]
-      : []),
+    {
+      header: 'Customer Account',
+      render: (row) => {
+        const cust = row.customer || customers.find((c) => c.id === row.customer_id) || (selectedCustomerId !== 'all' ? selectedCustomer : null);
+        return (
+          <div className={row.is_deleted ? 'line-through text-slate-400' : ''}>
+            <div className="font-semibold text-slate-900">{cust?.name || 'Unknown'}</div>
+            <div className="text-[10px] text-slate-500 font-mono">
+              {cust?.phone ? `${cust.phone} • ` : ''}{cust?.account?.account_number || '-'}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: 'Customer Type',
+      render: (row) => {
+        const typeName = getRowCustomerTypeName(row);
+        const isUnassigned = !typeName || typeName === 'Unassigned';
+        const displayLabel = isUnassigned ? 'Unassigned' : typeName;
+        return (
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold max-w-[130px] border ${
+              isUnassigned
+                ? 'bg-slate-50 text-slate-500 border-slate-200'
+                : 'bg-blue-50 text-blue-700 border-blue-200'
+            } ${row.is_deleted ? 'opacity-60' : ''}`}
+            title={displayLabel}
+          >
+            <Tag className={`w-2.5 h-2.5 shrink-0 ${isUnassigned ? 'text-slate-400' : 'text-brand-primary'}`} />
+            <span className="truncate">{displayLabel}</span>
+          </span>
+        );
+      },
+    },
     {
       header: 'Entry Type',
       accessorKey: 'entry_type',
